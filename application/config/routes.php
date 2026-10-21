@@ -59,3 +59,18 @@ $route['translate_uri_dashes'] = FALSE;
 */
 $route['api/example/users/(:num)'] = 'api/example/users/id/$1'; // Example 4
 $route['api/example/users/(:num)(\.)([a-zA-Z0-9_-]+)(.*)'] = 'api/example/users/id/$1/format/$3$4'; // Example 8
+/*
+| -------------------------------------------------------------------------
+| GeeksPOS REST API Routes (n8n & WhatsApp Integration)
+| -------------------------------------------------------------------------
+*/
+$route['api/ping'] = 'api/ping';
+$route['api/products'] = 'api/products';
+$route['api/products/(:num)'] = 'api/products/$1';
+$route['api/customers'] = 'api/customers';
+$route['api/customers/(:num)'] = 'api/customers/$1';
+$route['api/orders'] = 'api/orders';
+$route['api/orders/(:num)'] = 'api/orders/$1';
+$route['api/orders/(:num)/status'] = 'api/order_status/$1';
+$route['api/order_status'] = 'api/order_status';
+$route['api/ticket/(:num)'] = 'api/ticket/$1';
