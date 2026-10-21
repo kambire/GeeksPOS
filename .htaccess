@@ -1,0 +1,14 @@
+RewriteEngine On
+
+# Bloquear acceso web al repositorio git y a los respaldos .bak
+RewriteRule (^|/)\.git(/|$) - [F,L]
+RewriteRule \.bak$ - [F,L]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php?/$1 [L]
+
+#Cache
+<filesMatch ".(css|jpg|jpeg|png|gif|js|ico)$">
+Header set Cache-Control "max-age=2592000, public"
+</filesMatch>

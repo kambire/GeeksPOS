@@ -1,0 +1,43 @@
+services:
+  app:
+    build: .
+    container_name: geekspos_app
+    ports:
+      - "8080:80"
+    volumes:
+      # Monta el código para editar en caliente (los cambios se ven al instante)
+      - .:/var/www/html
+    environment:
+      # Sin APP_BASE_URL: el base_url se autodetecta (localhost o IP de la red LAN)
+      DB_HOST: db
+      DB_NAME: geekscom_nicole
+      DB_USER: geekscom_nicole
+      DB_PASS: "OCvacuCpWWhkwe7pFKMsAa9"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mariadb:10.6
+    container_name: geekspos_db
+    environment:
+      MYSQL_ROOT_PASSWORD: "rootpass"
+      MYSQL_DATABASE: geekscom_nicole
+      MYSQL_USER: geekscom_nicole
+      MYSQL_PASSWORD: "OCvacuCpWWhkwe7pFKMsAa9"
+    volumes:
+      - db_data:/var/lib/mysql
+      # El dump se importa automáticamente SOLO la primera vez (BD vacía)
+      - ./Geekspos.sql:/docker-entrypoint-initdb.d/01-geekspos.sql:ro
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  db_data:

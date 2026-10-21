@@ -1,0 +1,35 @@
+# === GeeksPOS — control de versiones de código ===
+
+# Respaldos locales
+*.bak
+*.bak-*
+*.orig
+
+# Logs y caché de la aplicación
+application/logs/*
+!application/logs/index.html
+application/cache/*
+!application/cache/index.html
+system/cache/*
+!system/cache/index.html
+
+# Datos subidos por usuarios (van en respaldos, no en git)
+userfiles/product/*
+!userfiles/product/index.html
+userfiles/temp/*
+!userfiles/temp/index.html
+userfiles/pos_temp/*
+!userfiles/pos_temp/index.html
+
+# Archivos del sistema operativo / editores
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Configuracion con secretos / por-cliente (NUNCA al repo). Usar los .example como plantilla.
+application/config/database.php
+application/config/config.php
+crm/application/config/database.php
+crm/application/config/config.php
+application/config/lic.php

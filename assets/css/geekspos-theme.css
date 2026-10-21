@@ -1,0 +1,898 @@
+/* ============================================================
+   GeeksPOS — Tema corporativo (identidad del login)
+   Aplica la paleta azul moderna a todo el panel interno.
+   Se carga después de style.css para sobrescribir el template.
+   ============================================================ */
+
+:root {
+    --gp-navy: #0b2545;
+    --gp-blue: #1f6fff;
+    --gp-blue-dark: #0b47d6;
+    --gp-ink: #1c2a44;
+    --gp-muted: #8a94a6;
+    --gp-soft: #f6f8fc;
+}
+
+/* ---------- Barra superior ---------- */
+.header-navbar.navbar-dark,
+.header-navbar.bg-gradient-x-grey-blue,
+nav.header-navbar.navbar-static-top {
+    background: linear-gradient(90deg, #0b2545 0%, #123a86 55%, #1f6fff 135%) !important;
+    box-shadow: 0 4px 18px rgba(11, 37, 69, .25) !important;
+    border: none !important;
+}
+
+.header-navbar.navbar-dark .navbar-nav .nav-link,
+.header-navbar.navbar-dark .nav-link,
+.header-navbar.navbar-dark .ficon,
+.header-navbar.navbar-dark i,
+.header-navbar.navbar-dark .user-name,
+.header-navbar.navbar-dark .dropdown-toggle {
+    color: #ffffff !important;
+}
+
+.header-navbar.navbar-dark .nav-link:hover,
+.header-navbar.navbar-dark .ficon:hover {
+    color: rgba(255, 255, 255, .82) !important;
+}
+
+/* Badges de notificación sobre la barra azul */
+.header-navbar.navbar-dark .badge-up {
+    box-shadow: 0 0 0 2px #123a86;
+}
+
+/* ---------- Menú horizontal (Tablero, Ventas, ...) ---------- */
+.header-navbar.navbar-horizontal,
+.header-navbar.navbar-light.navbar-horizontal {
+    background: #ffffff !important;
+    box-shadow: 0 3px 12px rgba(11, 37, 69, .07) !important;
+    border: none !important;
+}
+
+.navbar-horizontal #main-menu-navigation > li > a.nav-link {
+    color: var(--gp-ink) !important;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: all .18s ease;
+}
+
+.navbar-horizontal #main-menu-navigation > li > a.nav-link i {
+    color: var(--gp-blue) !important;
+}
+
+.navbar-horizontal #main-menu-navigation > li:hover > a.nav-link,
+.navbar-horizontal #main-menu-navigation > li.active > a.nav-link,
+.navbar-horizontal #main-menu-navigation > li.open > a.nav-link {
+    color: var(--gp-blue) !important;
+    background: rgba(31, 111, 255, .08) !important;
+}
+
+/* Dropdowns del menú */
+.navbar-horizontal .dropdown-menu .dropdown-item:hover,
+.navbar-horizontal .dropdown-menu .dropdown-item:focus {
+    background: rgba(31, 111, 255, .08) !important;
+    color: var(--gp-blue) !important;
+}
+
+/* ---------- Botones primarios ---------- */
+.btn-primary,
+.btn-primary:focus,
+.btn-primary.active,
+.btn-primary:not(:disabled):not(.disabled):active {
+    background: linear-gradient(135deg, var(--gp-blue), var(--gp-blue-dark)) !important;
+    border-color: var(--gp-blue-dark) !important;
+    box-shadow: 0 8px 18px -8px rgba(31, 111, 255, .6);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #2f7bff, var(--gp-blue)) !important;
+    box-shadow: 0 12px 22px -8px rgba(31, 111, 255, .7);
+}
+
+.btn-outline-primary {
+    color: var(--gp-blue) !important;
+    border-color: var(--gp-blue) !important;
+}
+
+.btn-outline-primary:hover {
+    background: var(--gp-blue) !important;
+    color: #fff !important;
+}
+
+/* Utilidades de color del template */
+.bg-primary,
+.bg-gradient-x-primary {
+    background: linear-gradient(135deg, var(--gp-blue), var(--gp-blue-dark)) !important;
+    color: #fff !important;
+}
+
+.text-primary,
+a.text-primary {
+    color: var(--gp-blue) !important;
+}
+
+a {
+    color: var(--gp-blue);
+}
+
+a:hover {
+    color: var(--gp-blue-dark);
+}
+
+/* ---------- Tarjetas ---------- */
+.card {
+    border: none !important;
+    border-radius: 14px !important;
+    box-shadow: 0 8px 26px -14px rgba(11, 37, 69, .22) !important;
+}
+
+.card .card-header {
+    border-radius: 14px 14px 0 0;
+    background: transparent;
+}
+
+/* Títulos de secciones tipo "PRESENTACIÓN GRÁFICA ..." */
+.card-title,
+.card-header h4,
+.card-header .card-title {
+    color: var(--gp-navy);
+}
+
+/* ---------- Avatar / marca ---------- */
+.header-navbar .avatar {
+    border: 2px solid rgba(255, 255, 255, .55);
+    border-radius: 50%;
+}
+
+/* Barra de búsqueda abierta en la barra azul */
+.header-navbar.navbar-dark .nav-search .search-input .input {
+    color: #fff;
+}
+
+/* ============================================================
+   POS — Panel del carrito (lista de productos / precios)
+   ============================================================ */
+
+/* Encabezado "Productos / Precio / Total" */
+.bg-gradient-directional-purple {
+    background: linear-gradient(135deg, var(--gp-navy) 0%, #123a86 55%, var(--gp-blue) 130%) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 22px -12px rgba(31, 111, 255, .55);
+    font-weight: 600;
+    letter-spacing: .2px;
+}
+
+.bg-gradient-directional-purple i {
+    opacity: .9;
+    margin-right: 4px;
+}
+
+/* Filas de ítems del carrito */
+#pos_items > .row {
+    border-color: #eef2f8 !important;
+    border-radius: 10px;
+    transition: background .15s ease;
+}
+
+#pos_items > .row:hover {
+    background: #f5f9ff;
+}
+
+/* Campo de cantidad */
+#pos_items .quantity .amnt,
+.users-list-padding .quantity .amnt {
+    width: 46px !important;
+    height: 34px;
+    text-align: center;
+    padding: 2px;
+    font-weight: 600;
+    color: var(--gp-ink);
+    border: 1.5px solid var(--gp-border) !important;
+    border-radius: 8px !important;
+    background: #fff;
+    display: inline-block;
+}
+
+#pos_items .quantity .amnt:focus {
+    border-color: var(--gp-blue) !important;
+    box-shadow: 0 0 0 3px rgba(31, 111, 255, .12);
+}
+
+/* Botones +/- de cantidad */
+.quantity-nav {
+    display: inline-flex;
+    flex-direction: column;
+    vertical-align: middle;
+    margin: 0 8px;
+}
+
+.quantity-button {
+    width: 26px;
+    height: 17px;
+    line-height: 15px;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 13px;
+    border-radius: 6px;
+    margin: 1px 0;
+    user-select: none;
+    transition: all .15s ease;
+}
+
+.quantity-button.quantity-up {
+    background: rgba(31, 111, 255, .12);
+    color: var(--gp-blue);
+}
+
+.quantity-button.quantity-up:hover {
+    background: var(--gp-blue);
+    color: #fff;
+}
+
+.quantity-button.quantity-down {
+    background: rgba(229, 57, 53, .12);
+    color: #e53935;
+}
+
+.quantity-button.quantity-down:hover {
+    background: #e53935;
+    color: #fff;
+}
+
+/* Total por fila y botón de eliminar */
+#pos_items .ttlText {
+    color: var(--gp-navy);
+    font-weight: 700;
+}
+
+.removeItem {
+    color: #e53935 !important;
+    margin-left: 8px;
+    cursor: pointer;
+    transition: color .15s ease;
+}
+
+.removeItem:hover {
+    color: #b71c1c !important;
+}
+
+/* Gran total — bloque destacado */
+.gp-grandtotal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: linear-gradient(135deg, var(--gp-navy) 0%, #123a86 55%, var(--gp-blue) 130%);
+    color: #fff;
+    border-radius: 16px;
+    padding: 16px 22px;
+    box-shadow: 0 14px 30px -12px rgba(31, 111, 255, .6);
+}
+
+.gp-grandtotal .gp-gt-label {
+    font-size: 15px;
+    font-weight: 600;
+    opacity: .95;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+}
+
+.gp-grandtotal .gp-gt-label i {
+    margin-right: 6px;
+    opacity: .9;
+}
+
+.gp-grandtotal .gp-gt-amount,
+.gp-grandtotal #bigtotal {
+    color: #fff !important;
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: .3px;
+    white-space: nowrap;
+}
+
+/* Fallback del total en otras vistas del POS */
+#bigtotal {
+    color: var(--gp-blue);
+    font-weight: 700;
+}
+
+/* Botones de acción del carrito (Cupón, Config, etc.) */
+.users-list-padding .btn,
+.users-list-padding .btn-outline-primary,
+.users-list-padding .btn-outline-secondary {
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+/* ============================================================
+   POS V2 — Ocultar columnas Impuesto y Descuento de la fila
+   (los valores siguen enviándose; solo se ocultan del cajero)
+   ============================================================ */
+#pos_list thead th:nth-child(3),
+#pos_list thead th:nth-child(4),
+#pos_list tbody > tr > td:nth-child(3),
+#pos_list tbody > tr > td:nth-child(4) {
+    display: none !important;
+}
+
+/* ============================================================
+   POS V2 — Ajustes responsive para celular / tablet
+   ============================================================ */
+
+/* Tablet: 3 productos por fila y tiles más táctiles */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    #pos_item .col-3 {
+        flex: 0 0 33.3333%;
+        max-width: 33.3333%;
+    }
+}
+
+/* El precio en el tile solo se muestra en celular */
+.gp-pos-price {
+    display: none;
+}
+
+/* Celular — catálogo como lista de texto (sin imagen) */
+@media (max-width: 767.98px) {
+    /* 3 columnas de texto (sin imagen) para aprovechar el espacio */
+    #pos_item .col-3 {
+        flex: 0 0 33.3333% !important;
+        max-width: 33.3333% !important;
+        border: none !important;
+        margin-bottom: 8px !important;
+        padding: 0 4px !important;
+    }
+
+    #pos_item .col-3 .select_pos_item {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 3px;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        width: 100%;
+        min-height: 68px !important;
+        padding: 14px 10px 12px !important;
+        border: 1px solid #e4ecf9 !important;
+        border-radius: 12px !important;
+        background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%) !important;
+        box-shadow: 0 2px 6px rgba(11, 37, 69, .06);
+        position: relative;
+        overflow: hidden;
+        transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
+    }
+
+    /* Acento azul superior */
+    #pos_item .col-3 .select_pos_item::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--gp-blue), #2f8bff);
+    }
+
+    /* Feedback al tocar */
+    #pos_item .col-3 .select_pos_item:hover,
+    #pos_item .col-3 .select_pos_item:active {
+        border-color: var(--gp-blue) !important;
+        background: #eef4ff !important;
+        box-shadow: 0 8px 18px -8px rgba(31, 111, 255, .45);
+        transform: translateY(-1px);
+    }
+
+    /* Ocultar la imagen y mostrar solo el nombre */
+    #pos_item .col-3 .select_pos_item img {
+        display: none !important;
+    }
+
+    #pos_item .col-3 .select_pos_item small {
+        font-size: 12.5px !important;
+        font-weight: 600;
+        white-space: normal !important;
+        line-height: 1.15;
+        color: var(--gp-ink);
+    }
+
+    /* Precio debajo del nombre (solo celular) */
+    #pos_item .col-3 .select_pos_item .gp-pos-price {
+        display: block !important;
+        font-size: 12px !important;
+        font-weight: 700;
+        color: var(--gp-blue);
+        line-height: 1.1;
+    }
+
+    /* Carrito compacto: ocultar el precio unitario (redundante con el total) */
+    #pos_list thead th:nth-child(2),
+    #pos_list tbody > tr > td:nth-child(2) {
+        display: none !important;
+    }
+
+    /* Nombre del producto como etiqueta, no como campo */
+    #pos_list tbody > tr > td[colspan] input {
+        text-align: left !important;
+        font-weight: 600;
+        border: none !important;
+        background: transparent !important;
+        padding: 4px 6px !important;
+        height: auto !important;
+        color: var(--gp-ink);
+    }
+
+    .p-mobile {
+        padding-left: 6px !important;
+        padding-right: 6px !important;
+    }
+
+    .bg-gradient-directional-purple {
+        font-size: 13px;
+    }
+}
+
+/* Teléfonos angostos: 2 columnas en vez de 3 */
+@media (max-width: 479.98px) {
+    #pos_item .col-3 {
+        flex: 0 0 50% !important;
+        max-width: 50% !important;
+    }
+}
+
+/* Ocultar secciones no esenciales del POS V2 en móvil/tablet */
+@media (max-width: 991.98px) {
+    .gp-mobile-hide {
+        display: none !important;
+    }
+}
+
+/* Móvil y tablet: elementos táctiles más cómodos */
+@media (max-width: 991.98px) {
+    #pos_item .select_pos_item {
+        min-height: 118px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    #pos_item .select_pos_item small {
+        font-size: 12px;
+        line-height: 1.2;
+    }
+
+    /* Campos y botones más altos para dedos */
+    .p-mobile .form-control,
+    #data_form .form-control {
+        height: 44px;
+        font-size: 15px;
+    }
+
+    /* Botones +/- del carrito más grandes */
+    .quantity-button {
+        width: 32px;
+        height: 22px;
+        line-height: 20px;
+        font-size: 15px;
+    }
+
+    #pos_items .quantity .amnt,
+    .users-list-padding .quantity .amnt {
+        width: 54px !important;
+        height: 40px;
+    }
+
+    /* Barra inferior de pago: botones grandes y a lo ancho */
+    .fixed-bottom .btn,
+    .pos-foot .btn,
+    #pay_btn,
+    .payment-bar .btn {
+        min-height: 52px;
+        font-size: 15px;
+        font-weight: 600;
+    }
+}
+
+/* Scrollbar sutil */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c3ccdb;
+    border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #9fb0c9;
+}
+
+/* ============================================================
+   Optimizaciones para Móviles (GeeksPOS Mobile UX)
+   - Acceso directo a POS en la barra superior
+   - Menú lateral deslizante (Drawer) corregido con backdrop
+   - Menú desplegable de 3 puntos (Opciones y configuración)
+   ============================================================ */
+
+/* Botón POS en la barra superior móvil */
+.gp-mobile-pos-btn {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    font-size: 13px !important;
+    padding: 6px 14px !important;
+    border-radius: 20px !important;
+    text-decoration: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px;
+    box-shadow: 0 3px 10px rgba(16, 185, 129, 0.45) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    line-height: 1.2 !important;
+    transition: all .15s ease !important;
+}
+
+.gp-mobile-pos-btn:hover,
+.gp-mobile-pos-btn:focus,
+.gp-mobile-pos-btn:active {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+    color: #ffffff !important;
+    transform: scale(0.97);
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3) !important;
+}
+
+.gp-mobile-pos-btn i {
+    font-size: 14px !important;
+    color: #ffffff !important;
+}
+
+/* Tarjeta POS destacada al inicio del menú de 3 puntos */
+.gp-pos-dropdown-link {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    border-radius: 10px !important;
+    padding: 12px 14px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    text-decoration: none !important;
+    margin: 4px 0 10px 0 !important;
+}
+
+.gp-pos-dropdown-link:hover,
+.gp-pos-dropdown-link:focus {
+    color: #ffffff !important;
+    background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+}
+
+.gp-pos-dropdown-link i {
+    font-size: 18px !important;
+    color: #ffffff !important;
+}
+
+/* Reglas Responsive para Dispositivos Móviles (< 768px) */
+@media (max-width: 767.98px) {
+    /* Barra superior fija en móviles con altura flexible */
+    .header-navbar.navbar-dark,
+    .header-navbar.bg-gradient-x-grey-blue,
+    nav.header-navbar.navbar-static-top {
+        background: #0b2545 !important;
+    }
+
+    .navbar-wrapper {
+        max-height: none !important;
+        height: auto !important;
+        background: transparent !important;
+    }
+
+    .header-navbar .navbar-header {
+        width: 100% !important;
+        padding: 0 10px !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    .header-navbar .navbar-header .navbar-nav {
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+    }
+
+    .header-navbar .navbar-header .navbar-brand {
+        padding: 8px 6px !important;
+        margin: 0 !important;
+    }
+
+    .header-navbar .navbar-header .brand-logo {
+        max-height: 34px !important;
+        width: auto !important;
+    }
+
+    .header-navbar .navbar-header .open-navbar-container {
+        padding: 8px 12px !important;
+        font-size: 18px !important;
+        color: #ffffff !important;
+    }
+
+    /* ----------------------------------------------------
+       Menú desplegable de los 3 puntos (#navbar-mobile)
+       ---------------------------------------------------- */
+    #navbar-mobile {
+        background: linear-gradient(180deg, #0b2545 0%, #0f325d 100%) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+        box-shadow: 0 18px 36px rgba(0, 0, 0, 0.45) !important;
+        padding: 12px 14px 20px 14px !important;
+        max-height: 80vh !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    #navbar-mobile.navbar-collapse .navbar-nav {
+        float: none !important;
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        margin: 0 !important;
+    }
+
+    #navbar-mobile.navbar-collapse .navbar-nav.float-left,
+    #navbar-mobile.navbar-collapse .navbar-nav.float-right {
+        float: none !important;
+    }
+
+    #navbar-mobile .nav-item {
+        float: none !important;
+        display: block !important;
+        width: 100% !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+        padding: 4px 0 !important;
+    }
+
+    #navbar-mobile .nav-item:last-child {
+        border-bottom: none !important;
+    }
+
+    #navbar-mobile .nav-link {
+        display: flex !important;
+        align-items: center !important;
+        padding: 10px 12px !important;
+        color: #ffffff !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        border-radius: 8px !important;
+        text-decoration: none !important;
+        width: 100% !important;
+    }
+
+    #navbar-mobile .nav-link:hover,
+    #navbar-mobile .nav-link:focus {
+        background: rgba(255, 255, 255, 0.08) !important;
+        color: #ffffff !important;
+    }
+
+    #navbar-mobile .nav-link i,
+    #navbar-mobile .nav-link .ficon {
+        font-size: 18px !important;
+        margin-right: 12px !important;
+        width: 24px !important;
+        text-align: center !important;
+        color: #ffffff !important;
+    }
+
+    #navbar-mobile .gp-nav-label {
+        color: #ffffff !important;
+        font-size: 14px !important;
+        display: inline-block !important;
+    }
+
+    /* Ajuste de badges en el menú desplegable móvil */
+    #navbar-mobile .badge-up {
+        position: static !important;
+        top: auto !important;
+        right: auto !important;
+        margin-left: 8px !important;
+        margin-right: 8px !important;
+        box-shadow: none !important;
+    }
+
+    /* Buscador en el menú desplegable */
+    #navbar-mobile .nav-search {
+        padding: 6px 0 !important;
+    }
+
+    #navbar-mobile .nav-search .search-input {
+        display: block !important;
+        width: 100% !important;
+    }
+
+    #navbar-mobile .nav-search .search-input .input {
+        width: 100% !important;
+        background: rgba(255, 255, 255, 0.12) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 8px !important;
+        color: #ffffff !important;
+        padding: 8px 12px !important;
+        font-size: 13px !important;
+    }
+
+    #navbar-mobile .nav-search .search-input .input::placeholder {
+        color: rgba(255, 255, 255, 0.65) !important;
+    }
+
+    /* Usuario y cuenta en el menú de 3 puntos */
+    #navbar-mobile .dropdown-user .user-name {
+        display: inline-block !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        margin-left: 10px !important;
+    }
+
+    /* Mega Menú (Configuración de Administrador) */
+    #navbar-mobile .mega-dropdown .mega-dropdown-menu {
+        position: static !important;
+        float: none !important;
+        width: 100% !important;
+        background: rgba(0, 0, 0, 0.22) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border-radius: 8px !important;
+        box-shadow: none !important;
+        margin: 6px 0 !important;
+        padding: 8px !important;
+    }
+
+    #navbar-mobile .mega-dropdown .mega-dropdown-menu .col-md-3 {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 0 0 100% !important;
+        padding: 0 4px !important;
+    }
+
+    #navbar-mobile .mega-dropdown .card {
+        background: transparent !important;
+        box-shadow: none !important;
+        margin-bottom: 6px !important;
+    }
+
+    #navbar-mobile .mega-dropdown .card-header a {
+        color: #ffffff !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+    }
+
+    #navbar-mobile .mega-dropdown a.dropdown-item {
+        color: rgba(255, 255, 255, 0.88) !important;
+        padding: 7px 10px !important;
+        font-size: 13px !important;
+        border-radius: 6px !important;
+    }
+
+    #navbar-mobile .mega-dropdown a.dropdown-item:hover {
+        background: rgba(31, 111, 255, 0.3) !important;
+        color: #ffffff !important;
+    }
+
+    /* Submenús desplegables (Ubicación, Notificaciones, Cuenta) */
+    #navbar-mobile .dropdown-menu {
+        position: static !important;
+        float: none !important;
+        width: 100% !important;
+        background: #0f325d !important;
+        border: 1px solid rgba(255, 255, 255, 0.14) !important;
+        border-radius: 8px !important;
+        box-shadow: none !important;
+        margin-top: 6px !important;
+        padding: 6px !important;
+    }
+
+    #navbar-mobile .dropdown-menu .dropdown-item {
+        color: #e4e7ed !important;
+        padding: 8px 12px !important;
+        font-size: 13px !important;
+        border-radius: 6px !important;
+    }
+
+    #navbar-mobile .dropdown-menu .dropdown-item:hover {
+        background: rgba(31, 111, 255, 0.3) !important;
+        color: #ffffff !important;
+    }
+}
+
+/* ----------------------------------------------------
+   Menú Lateral Deslizante (Drawer / Hamburguesa) en Móviles
+   ---------------------------------------------------- */
+@media (max-width: 991.98px) {
+    .vertical-overlay-menu .main-menu {
+        background: #ffffff !important;
+        box-shadow: 4px 0 25px rgba(11, 37, 69, 0.25) !important;
+        z-index: 1055 !important;
+        top: 0 !important;
+        height: 100vh !important;
+        width: 270px !important;
+        left: -270px !important;
+        padding-top: 14px !important;
+        transition: transform .25s cubic-bezier(0.4, 0, 0.2, 1), opacity .2s ease !important;
+    }
+
+    .vertical-overlay-menu.menu-open .main-menu {
+        transform: translate3d(270px, 0, 0) !important;
+        opacity: 1 !important;
+    }
+
+    .vertical-overlay-menu .main-menu .navigation {
+        background: #ffffff !important;
+        padding-bottom: 40px !important;
+    }
+
+    .vertical-overlay-menu .main-menu .navigation > li > a {
+        padding: 12px 18px !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        color: var(--gp-ink) !important;
+        display: flex !important;
+        align-items: center !important;
+        border-radius: 8px !important;
+        margin: 2px 8px !important;
+    }
+
+    .vertical-overlay-menu .main-menu .navigation > li > a i {
+        color: var(--gp-blue) !important;
+        font-size: 18px !important;
+        margin-right: 14px !important;
+        width: 20px !important;
+        text-align: center !important;
+    }
+
+    .vertical-overlay-menu .main-menu .navigation > li:hover > a,
+    .vertical-overlay-menu .main-menu .navigation > li.active > a,
+    .vertical-overlay-menu .main-menu .navigation > li.open > a {
+        background: rgba(31, 111, 255, 0.08) !important;
+        color: var(--gp-blue) !important;
+    }
+
+    .vertical-overlay-menu .main-menu .navigation .menu-content {
+        background: #f8fafc !important;
+        padding: 4px 0 6px 14px !important;
+    }
+
+    .vertical-overlay-menu .main-menu .navigation .menu-content li a {
+        padding: 9px 16px !important;
+        font-size: 13px !important;
+        color: #4b5563 !important;
+        display: block !important;
+    }
+
+    .vertical-overlay-menu .main-menu .navigation .menu-content li a:hover,
+    .vertical-overlay-menu .main-menu .navigation .menu-content li.active a {
+        color: var(--gp-blue) !important;
+        font-weight: 600 !important;
+    }
+
+    /* Fondo semitransparente (backdrop) al abrir el menú lateral */
+    .vertical-overlay-menu.menu-open::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(11, 37, 69, 0.55);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        z-index: 1050;
+        animation: gpFadeIn .2s ease;
+    }
+}
+
+@keyframes gpFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}

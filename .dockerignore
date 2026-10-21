@@ -1,0 +1,7 @@
+.git
+.gitignore
+*.bak
+db_data
+docker-compose.yml
+Dockerfile
+.dockerignore
