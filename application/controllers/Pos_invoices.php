@@ -47,6 +47,28 @@ class Pos_invoices extends CI_Controller
         $this->load->library("Registerlog");
         $this->load->library("Common");
 
+        $method = $this->router->fetch_method();
+        $tid = (int)$this->input->get('id');
+        $token = $this->input->get('token');
+        $validtoken = $tid ? hash_hmac('ripemd160', $tid, $this->config->item('encryption_key')) : '';
+        $is_valid_token = ($token && hash_equals($validtoken, $token));
+
+        $is_valid_api = false;
+        $api_key = $this->input->get('key') ?: $this->input->get('api_key') ?: $this->input->server('HTTP_X_API_KEY');
+        if ($api_key) {
+            $key_row = $this->db->where('key', $api_key)->get('geopos_restkeys')->row();
+            if ($key_row) {
+                $is_valid_api = true;
+            }
+        }
+
+        if (in_array($method, ['ticket', 'thermal_pdf']) && ($is_valid_token || $is_valid_api)) {
+            $this->limited = '';
+            $this->load->library("Custom");
+            $this->li_a = 'sales';
+            return;
+        }
+
         if (!$this->aauth->is_loggedin()) {
             redirect('/user/', 'refresh');
         }

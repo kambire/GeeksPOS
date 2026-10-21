@@ -329,8 +329,9 @@ class Api_model extends CI_Model
         }
 
         // 8. Build URLs & Response
-        $ticket_url = base_url("pos_invoices/ticket?id=$invoice_id");
-        $pdf_url = base_url("pos_invoices/thermal_pdf?id=$invoice_id");
+        $token = hash_hmac('ripemd160', $invoice_id, $this->config->item('encryption_key'));
+        $ticket_url = base_url("pos_invoices/ticket?id=$invoice_id&token=$token");
+        $pdf_url = base_url("pos_invoices/thermal_pdf?id=$invoice_id&token=$token");
 
         return [
             'status' => true,
@@ -377,8 +378,9 @@ class Api_model extends CI_Model
         $this->db->where('tid', (int)$id);
         $order['items'] = $this->db->get()->result_array();
 
-        $order['ticket_url'] = base_url("pos_invoices/ticket?id=$id");
-        $order['pdf_url'] = base_url("pos_invoices/thermal_pdf?id=$id");
+        $token = hash_hmac('ripemd160', $id, $this->config->item('encryption_key'));
+        $order['ticket_url'] = base_url("pos_invoices/ticket?id=$id&token=$token");
+        $order['pdf_url'] = base_url("pos_invoices/thermal_pdf?id=$id&token=$token");
 
         return $order;
     }
@@ -408,8 +410,9 @@ class Api_model extends CI_Model
         $list = $this->db->get()->result_array();
 
         foreach ($list as &$o) {
-            $o['ticket_url'] = base_url("pos_invoices/ticket?id=" . $o['id']);
-            $o['pdf_url'] = base_url("pos_invoices/thermal_pdf?id=" . $o['id']);
+            $token = hash_hmac('ripemd160', $o['id'], $this->config->item('encryption_key'));
+            $o['ticket_url'] = base_url("pos_invoices/ticket?id=" . $o['id'] . "&token=$token");
+            $o['pdf_url'] = base_url("pos_invoices/thermal_pdf?id=" . $o['id'] . "&token=$token");
         }
 
         return $list;

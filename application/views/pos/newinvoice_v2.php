@@ -699,28 +699,7 @@
 
         </div>
     </div>
-</div><div id="pos_print" class="modal fade" role="dialog">
-    <div class="modal-dialog ">
-
-        <!-- Modal content-->
-        <div class="modal-content">
-            <div class="modal-header">
-
-                <h4 class="modal-title">Legacy Print Mode</h4>
-                <button type="button" class="close" data-dismiss="modal">&times;</button>
-            </div>
-            <div class="modal-body border_no_print" id="print_section">
-                <embed src="<?= base_url('assets/images/ssl-seal.png') ?>"
-                       type="application/pdf" height="600px" width="470" id="loader_pdf"
-                ">
-                <input id="loader_file" value="">
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-            </div>
-        </div>
-
-    </div>
+</div>
 </div>
 <script type="text/javascript">
     $.ajax({
@@ -839,48 +818,15 @@
     $('#basicPay').on('hidden.bs.modal', function () {
         $('#card_section').hide(); $('#pay_buttons').show(); $('#p_txn').val('');
     });
-       var file_id;
-    $(document.body).on('click', '.print_image', function (e) {
-
-        e.preventDefault();
-
-        var inv_id = $(this).attr('data-inid');
-
-        jQuery.ajax({
-            url: '<?php echo base_url('pos_invoices/invoice_legacy') ?>',
-            type: 'POST',
-            data: 'inv=' + inv_id + '&' + crsf_token + '=' + crsf_hash,
-            dataType: 'json',
-            success: function (data) {
-                file_id= data.file_name;
-                $("#loader_pdf").attr('src','<?= base_url() ?>userfiles/pos_temp/'+data.file_name+'.pdf');
-                $("#loader_file").val(data.file_name);
-            },
-        });
-
-        $('#pos_print').modal('toggle');
-        $("#print_section").printThis({
-            //  beforePrint: function (e) {$('#pos_print').modal('hide');},
-
-            printDelay: 500,
-            afterPrint: clean_data()
-        });
+           // Thermal receipt printer popup handler
+    $(document).on('click', '.gp-btn-print-ticket', function (e) {
+        var href = $(this).attr('href');
+        if (href) {
+            e.preventDefault();
+            var printWin = window.open(href + '&print=1', 'ThermalReceipt', 'width=420,height=650,menubar=no,toolbar=no,location=no,status=no');
+            if (printWin) printWin.focus();
+        }
     });
-        function clean_data() {
-        setTimeout(function(){
-        var file_id= $("#loader_file").val();
-        jQuery.ajax({
-            url: '<?php echo base_url('pos_invoices/invoice_clean') ?>',
-            type: 'POST',
-            data: 'file_id=' + file_id + '&' + crsf_token + '=' + crsf_hash,
-            dataType: 'json',
-            success: function (data) {
-
-            },
-        });
-}, 2500);
-
-    }
 
     $(document).ready(function () {
         Mousetrap.bind('alt+x', function () {
