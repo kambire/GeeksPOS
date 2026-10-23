@@ -1,0 +1,93 @@
+# Compila, firma y publica la app de repartidores (Geeks Delivery).
+#
+# Para publicar una versión nueva:
+#   git tag -a delivery-v1.1.0 -m "Qué cambió en esta versión"
+#   git push origin delivery-v1.1.0
+#
+# El APK queda en GitHub Releases como geeks_delivery_<build>.apk y las apps instaladas
+# lo detectan solas al abrirse (lib/services/update_service.dart).
+#
+# Secrets requeridos (Settings > Secrets and variables > Actions):
+#   KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+name: App de repartidores
+
+on:
+  push:
+    tags: ['delivery-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: delivery_app
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Versión y número de build
+        id: ver
+        run: |
+          VERSION="${GITHUB_REF_NAME#delivery-v}"
+          # versionCode siempre creciente: Android solo instala builds mayores al instalado
+          BUILD=$((GITHUB_RUN_NUMBER + 100))
+          NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/^-----BEGIN PGP/,$d')"
+          {
+            echo "version=$VERSION"
+            echo "build=$BUILD"
+            echo 'notes<<NOTES_EOF'
+            echo "${NOTES:-Nueva versión de Geeks Delivery.}"
+            echo 'NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Clave de firma
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Faltan los secrets de firma (KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n' \
+            "$KEYSTORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > android/key.properties
+
+      - run: flutter pub get
+
+      - name: Compilar APK
+        run: |
+          flutter build apk --release \
+            --build-name="${{ steps.ver.outputs.version }}" \
+            --build-number="${{ steps.ver.outputs.build }}" \
+            --dart-define=APP_BUILD="${{ steps.ver.outputs.build }}" \
+            --dart-define=APP_VERSION="${{ steps.ver.outputs.version }}"
+          mv build/app/outputs/flutter-apk/app-release.apk "../geeks_delivery_${{ steps.ver.outputs.build }}.apk"
+
+      - name: Publicar release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Geeks Delivery ${{ steps.ver.outputs.version }}
+          body: ${{ steps.ver.outputs.notes }}
+          files: geeks_delivery_${{ steps.ver.outputs.build }}.apk
+
+      - name: Borrar la clave del runner
+        if: always()
+        run: rm -f android/app/upload-keystore.jks android/key.properties

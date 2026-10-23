@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/login_screen.dart';
+import 'services/update_service.dart';
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -23,6 +24,11 @@ void main() {
     ),
   );
   runApp(const GeeksDeliveryApp());
+
+  // Buscar actualizaciones en GitHub cuando la app ya está en pantalla
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future.delayed(const Duration(seconds: 3), UpdateService.checkAndPrompt);
+  });
 }
 
 class GeeksDeliveryApp extends StatelessWidget {
@@ -32,6 +38,7 @@ class GeeksDeliveryApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Geeks Delivery',
+      navigatorKey: UpdateService.navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
