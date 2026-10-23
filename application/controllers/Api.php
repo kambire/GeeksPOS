@@ -1,7 +1,7 @@
 <?php
 /**
- * GeeksPOS - REST API Controller for n8n & WhatsApp Integrations
- * Supporting thermal ticket printing, orders, products, and customer management.
+ * GeeksPOS - REST API Controller for Multi-System Integration
+ * Supporting n8n, WhatsApp Bots, Ecommerce, Delivery Apps, and Thermal Printing.
  */
 defined('BASEPATH') or exit('No direct script access allowed');
 
@@ -13,6 +13,28 @@ class Api extends REST_Controller
     {
         parent::__construct();
         $this->load->model('api_model');
+        $this->config->load('api_config', false, true);
+        $this->handle_cors();
+    }
+
+    /**
+     * Cross-Origin Resource Sharing (CORS) handler for web applications
+     */
+    protected function handle_cors()
+    {
+        $cors = $this->config->item('api_cors');
+        if (!empty($cors['enabled'])) {
+            $origin = $this->input->server('HTTP_ORIGIN') ?: '*';
+            if (in_array('*', $cors['allowed_origins']) || in_array($origin, $cors['allowed_origins'])) {
+                header('Access-Control-Allow-Origin: ' . $origin);
+                header('Access-Control-Allow-Methods: ' . implode(', ', $cors['allowed_methods']));
+                header('Access-Control-Allow-Headers: ' . implode(', ', $cors['allowed_headers']));
+                header('Access-Control-Max-Age: ' . ($cors['max_age'] ?? 86400));
+            }
+            if (strtolower($this->input->server('REQUEST_METHOD')) === 'options') {
+                exit(0);
+            }
+        }
     }
 
     /**
@@ -66,28 +88,95 @@ class Api extends REST_Controller
      */
     protected function get_request_data()
     {
-        $raw = $this->input->raw_input_stream;
+        if (!empty($this->request->body) && is_array($this->request->body)) {
+            return $this->request->body;
+        }
+        if (!empty($this->_post_args) && is_array($this->_post_args)) {
+            return $this->_post_args;
+        }
+        $raw = file_get_contents('php://input');
         if (!empty($raw)) {
             $json = json_decode($raw, true);
             if (json_last_error() === JSON_ERROR_NONE && is_array($json)) {
                 return $json;
             }
         }
-        return $this->post() ?: [];
+        return $_POST ?: [];
     }
 
     /**
      * GET /api/ping
-     * Quick healthcheck and connectivity test for n8n
+     * Quick healthcheck and connectivity test for n8n and other systems
      */
     public function ping_get()
     {
+        $base = $this->api_model->get_base_url();
         $this->response([
             'status' => true,
             'message' => 'GeeksPOS API online',
-            'system' => 'GeeksPOS Thermal & WhatsApp API Engine',
-            'version' => '1.0',
+            'system' => $this->config->item('api_name') ?: 'GeeksPOS API Engine',
+            'version' => $this->config->item('api_version') ?: '1.1',
+            'base_url' => $base,
             'timestamp' => date('Y-m-d H:i:s')
+        ], REST_Controller::HTTP_OK);
+    }
+
+    /**
+     * GET /api/config or GET /api/info
+     * Full discovery endpoint: returns addresses, endpoints, registered systems, and defaults
+     */
+    public function config_get()
+    {
+        $base = $this->api_model->get_base_url();
+        $systems = $this->config->item('api_systems') ?: [];
+
+        // Sanitize systems list (hide private keys for security)
+        $clean_systems = [];
+        foreach ($systems as $sys_id => $sys) {
+            $clean_systems[$sys_id] = [
+                'name'               => $sys['name'] ?? $sys_id,
+                'description'        => $sys['description'] ?? '',
+                'default_order_type' => $sys['default_order_type'] ?? 'delivery',
+                'auto_print'         => !empty($sys['auto_print']),
+                'paper_width'        => $sys['paper_width'] ?? 80,
+                'has_webhook'        => !empty($sys['webhook_url'])
+            ];
+        }
+
+        $this->response([
+            'status' => true,
+            'api_info' => [
+                'name'        => $this->config->item('api_name') ?: 'GeeksPOS Multi-System REST API Engine',
+                'version'     => $this->config->item('api_version') ?: '1.1',
+                'environment' => $this->config->item('api_environment') ?: 'production',
+                'base_url'    => $base,
+                'api_url'     => $base . 'api/'
+            ],
+            'registered_systems' => $clean_systems,
+            'defaults' => $this->config->item('api_defaults') ?: [
+                'employee_id' => 11,
+                'location_id' => 0,
+                'customer_id' => 1,
+                'payment_method' => 'Cash',
+                'payment_status' => 'due',
+                'thermal_paper_width' => 80,
+                'ticket_auto_print' => true
+            ],
+            'allowed_order_types' => $this->config->item('api_allowed_order_types') ?: ['delivery', 'pickup', 'dinein'],
+            'allowed_statuses'    => $this->config->item('api_allowed_statuses') ?: ['paid', 'due', 'canceled', 'partial'],
+            'endpoints' => [
+                'ping'             => ['method' => 'GET',  'url' => $base . 'api/ping', 'description' => 'Test de conexión'],
+                'config'           => ['method' => 'GET',  'url' => $base . 'api/config', 'description' => 'Configuración y descubrimiento'],
+                'products_list'    => ['method' => 'GET',  'url' => $base . 'api/products?search={term}&limit=50', 'description' => 'Consulta de catálogo y stock'],
+                'product_detail'   => ['method' => 'GET',  'url' => $base . 'api/products/{id}', 'description' => 'Detalle de producto por ID'],
+                'customers_search' => ['method' => 'GET',  'url' => $base . 'api/customers?phone={phone}', 'description' => 'Búsqueda por teléfono de WhatsApp'],
+                'customer_create'  => ['method' => 'POST', 'url' => $base . 'api/customers', 'description' => 'Crear o actualizar cliente'],
+                'orders_create'    => ['method' => 'POST', 'url' => $base . 'api/orders', 'description' => 'Crear pedido/factura desde WhatsApp'],
+                'orders_list'      => ['method' => 'GET',  'url' => $base . 'api/orders?status={status}&limit=20', 'description' => 'Listar pedidos recientes'],
+                'order_detail'     => ['method' => 'GET',  'url' => $base . 'api/orders/{id}', 'description' => 'Detalle completo del pedido'],
+                'order_status'     => ['method' => 'POST', 'url' => $base . 'api/orders/{id}/status', 'description' => 'Actualizar estado del pedido'],
+                'ticket'           => ['method' => 'GET',  'url' => $base . 'api/ticket/{id}', 'description' => 'Obtener enlaces del ticket térmico']
+            ]
         ], REST_Controller::HTTP_OK);
     }
 
@@ -215,7 +304,7 @@ class Api extends REST_Controller
 
     /**
      * POST /api/orders
-     * Create order & invoice from n8n / WhatsApp
+     * Create order & invoice from external systems (n8n WhatsApp, Ecommerce, etc.)
      */
     public function orders_post()
     {
@@ -228,7 +317,10 @@ class Api extends REST_Controller
             ], REST_Controller::HTTP_BAD_REQUEST);
         }
 
-        $result = $this->api_model->create_order($payload);
+        // Detect originating external system
+        $system = $this->input->server('HTTP_X_SYSTEM') ?: (isset($payload['system']) ? $payload['system'] : 'n8n_whatsapp');
+
+        $result = $this->api_model->create_order($payload, $system);
 
         if (!$result['status']) {
             $this->response($result, REST_Controller::HTTP_BAD_REQUEST);
@@ -240,7 +332,6 @@ class Api extends REST_Controller
             $this->load->library('Printer');
             $printer = $this->printer->check(0);
             if ($printer && @$printer['val2'] == 'server') {
-                // If server ESC/POS printer configured, we can ping printer or log
                 $result['thermal_escpos_triggered'] = true;
             } else {
                 $result['thermal_escpos_triggered'] = false;
@@ -253,6 +344,7 @@ class Api extends REST_Controller
     /**
      * POST /api/orders/{id}/status or POST /api/order_status
      * Update order status: { "id": 123, "status": "paid"|"due"|"canceled", "notes": "..." }
+     * Dispatches webhook to external system if configured!
      */
     public function order_status_post($id = null)
     {
@@ -274,6 +366,8 @@ class Api extends REST_Controller
         $result = $this->api_model->update_order_status($id, $status, $notes);
 
         if ($result['status']) {
+            // Dispatch webhook notification to external system (e.g. n8n)
+            $this->api_model->dispatch_webhook($id, $status, $notes);
             $this->response($result, REST_Controller::HTTP_OK);
         } else {
             $this->response($result, REST_Controller::HTTP_BAD_REQUEST);
@@ -299,6 +393,7 @@ class Api extends REST_Controller
             $this->response(['status' => false, 'message' => 'Order not found'], REST_Controller::HTTP_NOT_FOUND);
         }
 
+        $base = $this->api_model->get_base_url();
         $token = hash_hmac('ripemd160', $id, $this->config->item('encryption_key'));
         $this->response([
             'status' => true,
@@ -307,10 +402,10 @@ class Api extends REST_Controller
             'order_name' => $order['order_name'],
             'order_type' => $order['order_type'],
             'total' => $order['total'],
-            'ticket_html_80mm' => base_url("pos_invoices/ticket?id=$id&token=$token&width=80"),
-            'ticket_html_58mm' => base_url("pos_invoices/ticket?id=$id&token=$token&width=58"),
-            'ticket_html_autoprint' => base_url("pos_invoices/ticket?id=$id&token=$token&print=1"),
-            'ticket_pdf' => base_url("pos_invoices/thermal_pdf?id=$id&token=$token")
+            'ticket_html_80mm' => $base . "pos_invoices/ticket?id=$id&token=$token&width=80",
+            'ticket_html_58mm' => $base . "pos_invoices/ticket?id=$id&token=$token&width=58",
+            'ticket_html_autoprint' => $base . "pos_invoices/ticket?id=$id&token=$token&print=1",
+            'ticket_pdf' => $base . "pos_invoices/thermal_pdf?id=$id&token=$token"
         ], REST_Controller::HTTP_OK);
     }
 }

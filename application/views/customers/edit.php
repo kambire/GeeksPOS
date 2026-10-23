@@ -120,15 +120,25 @@
                                        value="<?php echo $customer['postbox'] ?>" id="postbox">
                             </div>
                         </div>
-                        <div class="form-group row">
+                        <div class="form-group row bg-light p-1 rounded" style="border: 1.5px dashed #10b981; margin-bottom: 15px;">
 
-                            <label class="col-sm-2 col-form-label"
-                                   for="postbox"><?php echo $this->lang->line('Tax') ?> ID</label>
+                            <label class="col-sm-2 col-form-label font-weight-bold"
+                                   for="taxid" style="color: #065f46;"><i class="fa fa-id-card-o"></i> RUC / CI (PY)</label>
 
                             <div class="col-sm-10">
-                                <input type="text" placeholder="TAX ID"
-                                       class="form-control margin-bottom" name="taxid"
-                                       value="<?php echo $customer['taxid'] ?>">
+                                <div class="input-group">
+                                    <input type="text" placeholder="TAX ID (RUC o Cédula)"
+                                           class="form-control" name="taxid" id="taxid"
+                                           value="<?php echo $customer['taxid'] ?>">
+                                    <div class="input-group-append">
+                                        <button type="button" class="btn btn-success" id="btn_crm_dnit" style="background:#10b981; border-color:#10b981; font-weight:600;">
+                                            <i class="fa fa-search"></i> Consultar DNIT
+                                        </button>
+                                    </div>
+                                </div>
+                                <small id="crm_dnit_msg" class="text-muted" style="display:block; margin-top:4px; font-size:11.5px;">
+                                    <i class="fa fa-info-circle"></i> Ingrese o actualice el RUC o Cédula y presione <strong>Consultar DNIT</strong> para verificar la Razón Social.
+                                </small>
                             </div>
                         </div>
                         <div class="form-group row">
@@ -343,4 +353,64 @@
         </div>
     </div>
 </div>
+
+<script type="text/javascript">
+$(document).ready(function () {
+    $('#btn_crm_dnit').click(function (e) {
+        e.preventDefault();
+        var rucVal = $('#taxid').val().trim();
+        if (!rucVal) {
+            $('#crm_dnit_msg').html('<span class="text-danger"><i class="fa fa-exclamation-triangle"></i> Ingrese un RUC o Cédula para consultar.</span>');
+            return;
+        }
+
+        var $btn = $(this);
+        var oldHtml = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Consultando...');
+        $('#crm_dnit_msg').html('<span class="text-info"><i class="fa fa-spinner fa-spin"></i> Consultando en DNIT / Marangatu...</span>');
+
+        $.ajax({
+            type: "POST",
+            url: baseurl + 'customers/consulta_ruc',
+            data: { ruc: rucVal, auto_create: 0, [crsf_token]: crsf_hash },
+            dataType: 'json',
+            success: function (data) {
+                $btn.prop('disabled', false).html(oldHtml);
+                if (data.status === 'Success') {
+                    if (data.found) {
+                        $('input[name="name"]').val(data.name);
+                        $('input[name="company"]').val(data.company || data.name);
+                        $('#taxid').val(data.taxid);
+                        $('input[name="docid"]').val(data.docid);
+                        if (data.phone) $('input[name="phone"]').val(data.phone);
+                        if (data.email) $('input[name="email"]').val(data.email);
+                        if (data.address) $('input[name="address"]').val(data.address);
+                        if (data.city) $('input[name="city"]').val(data.city);
+
+                        var estadoInfo = data.estado ? (' - Estado: <strong>' + data.estado + '</strong>') : '';
+                        $('#crm_dnit_msg').html('<span class="text-success font-weight-bold"><i class="fa fa-check-circle"></i> Verificado en DNIT (DV: ' + data.dv + ')' + estadoInfo + '. Datos actualizados.</span>');
+                    } else {
+                        $('#taxid').val(data.taxid);
+                        $('input[name="docid"]').val(data.docid);
+                        $('#crm_dnit_msg').html('<span class="text-muted"><i class="fa fa-info-circle"></i> No figura como contribuyente en DNIT. Dígito sugerido: <strong>' + data.dv + '</strong>.</span>');
+                    }
+                } else {
+                    $('#crm_dnit_msg').html('<span class="text-danger"><i class="fa fa-exclamation-triangle"></i> ' + (data.message || 'Error en la consulta') + '</span>');
+                }
+            },
+            error: function () {
+                $btn.prop('disabled', false).html(oldHtml);
+                $('#crm_dnit_msg').html('<span class="text-danger"><i class="fa fa-exclamation-triangle"></i> Error de conexión con el servicio DNIT.</span>');
+            }
+        });
+    });
+
+    $('#taxid').keypress(function (e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            $('#btn_crm_dnit').click();
+        }
+    });
+});
+</script>
 

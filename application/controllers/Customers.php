@@ -175,6 +175,25 @@ class Customers extends CI_Controller
 
     }
 
+    /**
+     * Consulta de RUC / Cédula en DNIT Paraguay (ex-SET Marangatu)
+     */
+    public function consulta_ruc()
+    {
+        $ruc = $this->input->get_post('ruc', true);
+        if (!$ruc) {
+            $ruc = $this->input->get_post('term', true);
+        }
+        $auto_create = (bool)$this->input->get_post('auto_create');
+
+        $this->load->library('sifen');
+        $result = $this->sifen->consultar_ruc($ruc, $auto_create);
+
+        $this->output
+            ->set_content_type('application/json')
+            ->set_output(json_encode($result));
+    }
+
     function sendSelected()
     {
         if (!$this->aauth->premission(8)) {

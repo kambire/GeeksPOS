@@ -113,6 +113,10 @@
                                                                         class="ft-chevron-right"></i> <?php echo $this->lang->line('company_settings') ?>
                                                             </a></li>
                                                         <li><a class="dropdown-item"
+                                                               href="<?php echo base_url(); ?>sifen_config"><i
+                                                                        class="ft-chevron-right"></i> Facturación SIFEN (PY)
+                                                            </a></li>
+                                                        <li><a class="dropdown-item"
                                                                href="<?php echo base_url(); ?>locations"><i
                                                                         class="ft-chevron-right"></i><?php echo $this->lang->line('Business Locations') ?>
                                                             </a></li><li><select  class="dropdown-item" onchange="javascript:location.href = baseurl+'settings/switch_location?id='+this.value;"><?php
@@ -625,6 +629,11 @@
                                 class="icon-handbag"></i><span><?= $this->lang->line('POS') ?></span></a>
                 </li>
             <?php } ?>
+            <?php if ($this->aauth->get_user()->roleid >= 4) { ?>
+                <li class="nav-item <?php if ($this->li_a == "sifen") echo ' active'; ?>"><a class="nav-link" href="<?= base_url(); ?>sifen_config"><i
+                                class="fa fa-certificate text-danger"></i><span>Facturación SIFEN</span></a>
+                </li>
+            <?php } ?>
             <?php
             if ($this->aauth->premission(1)) { ?>
                 <li class="dropdown nav-item" data-menu="dropdown"><a class="dropdown-toggle nav-link" href="#"
@@ -661,7 +670,11 @@
 
                                 <li data-menu=""><a class="dropdown-item" href="<?php echo base_url(); ?>invoices"
                                                     data-toggle="dropdown"><?php echo $this->lang->line('Manage Invoices'); ?></a>
-
+                                </li>
+                                <?php if ($this->aauth->get_user()->roleid >= 4) { ?>
+                                <li data-menu=""><a class="dropdown-item" href="<?php echo base_url(); ?>sifen_config"><i class="fa fa-certificate text-danger"></i> Facturación SIFEN (PY)</a>
+                                </li>
+                                <?php } ?>
                             </ul>
                         </li>
                         <li class="dropdown dropdown-submenu" data-menu="dropdown-submenu"><a

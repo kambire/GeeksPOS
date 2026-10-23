@@ -304,6 +304,16 @@ class Invoices extends CI_Controller
 
         }
             if ($transok) {
+                try {
+                    $this->load->library('sifen');
+                    $sifen_cfg = $this->sifen->get_config();
+                    if (!empty($sifen_cfg['habilitado'])) {
+                        $this->sifen->procesar_factura_sifen($invocieno);
+                    }
+                } catch (\Throwable $e) {
+                    log_message('error', 'SIFEN Standard Invoice Error: ' . $e->getMessage());
+                }
+
                 $validtoken = hash_hmac('ripemd160', $invocieno, $this->config->item('encryption_key'));
                 $link = base_url('billing/view?id=' . $invocieno . '&token=' . $validtoken);
                 echo json_encode(array('status' => 'Success', 'message' =>

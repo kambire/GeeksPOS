@@ -47,7 +47,8 @@ class Billing_model extends CI_Model
            $this->db->select('*');
             $this->db->from('geopos_accounts');
             $this->db->where('id', $account_d);
-                 if ($this->aauth->get_user()->loc) {
+                 $u_loc = ($this->aauth->is_loggedin() && @$this->aauth->get_user()) ? $this->aauth->get_user()->loc : 0;
+                 if ($u_loc) {
             $this->db->where('loc', $this->aauth->get_user()->loc);
            if(BDATA) $this->db->or_where('loc', 0);
         }else{

@@ -24,7 +24,7 @@ class Search_products extends CI_Controller
 	public function __construct()
 	{
 		parent::__construct();
-		$this->load->library("Aauth");
+		$this->load->library("aauth");
 		$this->load->model('search_model');
 		if (!$this->aauth->is_loggedin()) {
 			redirect('/user/', 'refresh');
@@ -183,8 +183,7 @@ class Search_products extends CI_Controller
 	public function pos_c_search()
 	{
 		$result = array();
-		$out = array();
-		$name = $this->input->get('keyword', true);
+		$name = trim((string)$this->input->get('keyword', true));
 		$whr = '';
 		if ($this->aauth->get_user()->loc) {
 			$whr = ' (loc=' . $this->aauth->get_user()->loc . ' OR loc=0) AND ';
@@ -193,13 +192,57 @@ class Search_products extends CI_Controller
 			$whr = ' (loc=0) AND ';
 		}
 
-		if ($name) {
-			$query = $this->db->query("SELECT id,name,phone,discount_c FROM geopos_customers WHERE $whr (UPPER(name)  LIKE '%" . strtoupper($name) . "%' OR UPPER(phone)  LIKE '" . strtoupper($name) . "%') LIMIT 6");
+		if ($name !== '') {
+			$s_name = $this->db->escape_like_str($name);
+			$query = $this->db->query("SELECT id,name,phone,taxid,docid,discount_c FROM geopos_customers WHERE $whr (UPPER(name) LIKE '%" . strtoupper($s_name) . "%' OR UPPER(phone) LIKE '" . strtoupper($s_name) . "%' OR taxid LIKE '%" . $s_name . "%' OR docid LIKE '%" . $s_name . "%') LIMIT 6");
 			$result = $query->result_array();
-			echo '<ol>';
+
+			// Si el término contiene dígitos (5 o más dígitos, típico de RUC o Cédula paraguaya)
+			$digits_only = preg_replace('/[^0-9]/', '', $name);
+			$es_posible_ruc = (strlen($digits_only) >= 5 && strlen($digits_only) <= 11);
+
+			// Verificar si ya existe en los resultados locales una coincidencia exacta de taxid o docid
+			$ya_encontrado_local = false;
+			foreach ($result as $r) {
+				$r_tax = preg_replace('/[^0-9]/', '', (string)$r['taxid']);
+				$r_doc = preg_replace('/[^0-9]/', '', (string)$r['docid']);
+				if ($r_tax === $digits_only || $r_doc === $digits_only) {
+					$ya_encontrado_local = true;
+					break;
+				}
+			}
+
+			$dnit_result = null;
+			if ($es_posible_ruc && !$ya_encontrado_local) {
+				// Consultar en DNIT online
+				$this->load->library('sifen');
+				$res_dnit = $this->sifen->consultar_ruc($name, false);
+				if (!empty($res_dnit['found']) && !empty($res_dnit['name'])) {
+					$dnit_result = $res_dnit;
+				}
+			}
+
+			echo '<ol class="customer-search-list">';
 			$i = 1;
+			// Si DNIT encontró un contribuyente nuevo que no está en la base local, mostrarlo primero con opción de 1-clic
+			if ($dnit_result) {
+				$d_ruc = htmlspecialchars($dnit_result['taxid']);
+				$d_name = htmlspecialchars($dnit_result['name']);
+				$d_estado = htmlspecialchars($dnit_result['estado']);
+				$js_ruc = addslashes($dnit_result['taxid']);
+				echo "<li style=\"background:#ecfdf5; border-left: 4px solid #10b981; margin-bottom: 4px; padding: 6px 10px; cursor: pointer;\" onClick=\"posSeleccionarYCrearDNIT('{$js_ruc}')\">";
+				echo "<span style=\"background:#10b981; color:#fff; font-size:10px; padding:2px 5px; border-radius:3px; font-weight:700;\">DNIT</span>";
+				echo "<p style=\"margin:0 0 2px 0; font-size:12.5px; font-weight:bold; color:#065f46;\">{$d_name} <span class=\"badge badge-success\" style=\"font-size:9.5px; padding:1px 4px;\">{$d_estado}</span></p>";
+				echo "<p style=\"margin:0; font-size:11px; color:#047857;\"><i class=\"fa fa-id-card-o\"></i> RUC: <strong>{$d_ruc}</strong> &nbsp;•&nbsp; <span style=\"color:#0284c7; font-weight:600;\"><i class=\"fa fa-plus-circle\"></i> Clic para agregar y facturar</span></p>";
+				echo "</li>";
+			}
+
 			foreach ($result as $row) {
-				echo "<li onClick=\"PselectCustomer('" . $row['id'] . "','" . $row['name'] . " ','" . amountFormat_general($row['discount_c']) . "')\"><span>$i</span><p>" . $row['name'] . " &nbsp; &nbsp  " . $row['phone'] . "</p></li>";
+				$tax_info = !empty($row['taxid']) ? (" <span class=\"badge badge-light border border-secondary text-dark\" style=\"font-size:11px;\">RUC: " . htmlspecialchars($row['taxid']) . "</span>") : '';
+				$phone_info = !empty($row['phone']) ? (" &nbsp;•&nbsp; <i class=\"fa fa-phone\"></i> " . htmlspecialchars($row['phone'])) : '';
+				$safe_name = addslashes($row['name']);
+				$safe_tax = !empty($row['taxid']) ? addslashes($row['taxid']) : '';
+				echo "<li onClick=\"PselectCustomerFull('" . $row['id'] . "','" . $safe_name . "','" . $safe_tax . "','" . amountFormat_general($row['discount_c']) . "')\"><span>$i</span><p><strong>" . htmlspecialchars($row['name']) . "</strong>{$tax_info}{$phone_info}</p></li>";
 				$i++;
 			}
 			echo '</ol>';

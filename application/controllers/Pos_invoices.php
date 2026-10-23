@@ -62,7 +62,7 @@ class Pos_invoices extends CI_Controller
             }
         }
 
-        if (in_array($method, ['ticket', 'thermal_pdf']) && ($is_valid_token || $is_valid_api)) {
+        if (in_array($method, ['ticket', 'thermal_pdf', 'download_dte']) && ($is_valid_token || $is_valid_api)) {
             $this->limited = '';
             $this->load->library("Custom");
             $this->li_a = 'sales';
@@ -307,10 +307,63 @@ class Pos_invoices extends CI_Controller
             } else {
                 $discstatus = 1;
             }
+
+            // Datos de Factura con RUC ingresados directamente en el modal de cobro
+            $pay_doc_mode = $this->input->post('pay_doc_mode', true);
+            $pay_taxid = trim((string)$this->input->post('pay_taxid', true));
+            $pay_customer_name = trim((string)$this->input->post('pay_customer_name', true));
+
+            if ($pay_doc_mode === 'factura' && !empty($pay_taxid)) {
+                $taxid_clean = trim($pay_taxid);
+                $base_ruc = preg_replace('/[^0-9]/', '', explode('-', $taxid_clean)[0]);
+
+                // 1. Buscar si ya existe el cliente en la base local
+                $this->db->group_start();
+                $this->db->where('taxid', $taxid_clean);
+                $this->db->or_where('taxid', $base_ruc);
+                $this->db->or_where('docid', $base_ruc);
+                $this->db->group_end();
+                $q_cust = $this->db->get('geopos_customers', 1);
+
+                if ($q_cust && $q_cust->num_rows() > 0) {
+                    $row_c = $q_cust->row_array();
+                    $customer_id = (int)$row_c['id'];
+                    if (!empty($pay_customer_name) && (empty($row_c['name']) || $row_c['name'] !== $pay_customer_name)) {
+                        $this->db->where('id', $customer_id);
+                        $this->db->update('geopos_customers', ['name' => $pay_customer_name, 'company' => $pay_customer_name]);
+                    }
+                } else {
+                    $this->load->library('sifen');
+                    $dv = $this->sifen->calcular_dv_ruc($base_ruc);
+                    $full_taxid = (strpos($taxid_clean, '-') !== false) ? $taxid_clean : ($base_ruc . '-' . $dv);
+                    $c_name = !empty($pay_customer_name) ? $pay_customer_name : ('Cliente ' . $full_taxid);
+
+                    $new_cust = [
+                        'name' => $c_name,
+                        'company' => $c_name,
+                        'taxid' => $full_taxid,
+                        'docid' => $base_ruc,
+                        'phone' => '',
+                        'email' => '',
+                        'address' => 'Paraguay',
+                        'city' => 'Asunción',
+                        'country' => 'Paraguay',
+                        'gid' => 1,
+                        'loc' => $this->aauth->get_user()->loc ?: 0
+                    ];
+                    $this->db->insert('geopos_customers', $new_cust);
+                    $customer_id = (int)$this->db->insert_id();
+                }
+            } elseif (empty($customer_id) || $customer_id == 0) {
+                $customer_id = 1;
+            }
+
+            if (empty($order_name) && !empty($pay_customer_name)) {
+                $order_name = $pay_customer_name;
+            }
+
             if ($customer_id == 0) {
-                echo json_encode(array('status' => 'Error', 'message' =>
-                    $this->lang->line('Please add a new client')));
-                exit;
+                $customer_id = 1;
             }
             $this->db->trans_start();
             //products
@@ -453,6 +506,20 @@ class Pos_invoices extends CI_Controller
                 $validtoken = hash_hmac('ripemd160', $invocieno, $this->config->item('encryption_key'));
                 $link = base_url('billing/view?id=' . $invocieno . '&token=' . $validtoken);
                 if ($transok) {
+                    $sifen_badge = '';
+                    try {
+                        $this->load->library('sifen');
+                        $sifen_cfg = $this->sifen->get_config();
+                        if (!empty($sifen_cfg['habilitado'])) {
+                            $sifen_res = $this->sifen->procesar_factura_sifen($invocieno);
+                            if (!empty($sifen_res['status']) && !empty($sifen_res['sifen_numero'])) {
+                                $sifen_badge = "<div class='badge badge-success p-1 mb-1 font-medium-1' style='display:inline-block;'><i class='fa fa-certificate'></i> Factura SIFEN Nº " . $sifen_res['sifen_numero'] . "</div><br>";
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        log_message('error', 'SIFEN POS Sale Error: ' . $e->getMessage());
+                    }
+
                     $this->load->library("Printer");
                     $printer = $this->printer->check($this->aauth->get_user()->loc);
                     $p_tid = 'thermal_p';
@@ -464,6 +531,7 @@ class Pos_invoices extends CI_Controller
 
                     $msg_html = "<div class='gp-post-sale-box p-1 text-center'>"
                         . "<h4 class='text-success font-weight-bold mb-1'><i class='fa fa-check-circle'></i> " . $this->lang->line('Invoice Success') . " #" . $invocieno_n . "</h4>"
+                        . $sifen_badge
                         . "<div class='my-1'>"
                         . "<a target='_blank' href='$ticket_url' class='btn btn-success btn-lg mx-1 gp-btn-print-ticket'><i class='fa fa-print'></i> <strong>Imprimir Ticket Térmico</strong></a> ";
 
@@ -479,6 +547,7 @@ class Pos_invoices extends CI_Controller
                         'status' => 'Success',
                         'invoice_id' => $invocieno,
                         'tid' => $invocieno_n,
+                        'sifen_numero' => !empty($sifen_res['sifen_numero']) ? $sifen_res['sifen_numero'] : null,
                         'ticket_url' => $ticket_url,
                         'pdf_url' => $pdf_url,
                         'create_url' => $create_url,
@@ -594,10 +663,63 @@ class Pos_invoices extends CI_Controller
             } else {
                 $discstatus = 1;
             }
+
+            // Datos de Factura con RUC ingresados directamente en el modal de cobro
+            $pay_doc_mode = $this->input->post('pay_doc_mode', true);
+            $pay_taxid = trim((string)$this->input->post('pay_taxid', true));
+            $pay_customer_name = trim((string)$this->input->post('pay_customer_name', true));
+
+            if ($pay_doc_mode === 'factura' && !empty($pay_taxid)) {
+                $taxid_clean = trim($pay_taxid);
+                $base_ruc = preg_replace('/[^0-9]/', '', explode('-', $taxid_clean)[0]);
+
+                // 1. Buscar si ya existe el cliente en la base local
+                $this->db->group_start();
+                $this->db->where('taxid', $taxid_clean);
+                $this->db->or_where('taxid', $base_ruc);
+                $this->db->or_where('docid', $base_ruc);
+                $this->db->group_end();
+                $q_cust = $this->db->get('geopos_customers', 1);
+
+                if ($q_cust && $q_cust->num_rows() > 0) {
+                    $row_c = $q_cust->row_array();
+                    $customer_id = (int)$row_c['id'];
+                    if (!empty($pay_customer_name) && (empty($row_c['name']) || $row_c['name'] !== $pay_customer_name)) {
+                        $this->db->where('id', $customer_id);
+                        $this->db->update('geopos_customers', ['name' => $pay_customer_name, 'company' => $pay_customer_name]);
+                    }
+                } else {
+                    $this->load->library('sifen');
+                    $dv = $this->sifen->calcular_dv_ruc($base_ruc);
+                    $full_taxid = (strpos($taxid_clean, '-') !== false) ? $taxid_clean : ($base_ruc . '-' . $dv);
+                    $c_name = !empty($pay_customer_name) ? $pay_customer_name : ('Cliente ' . $full_taxid);
+
+                    $new_cust = [
+                        'name' => $c_name,
+                        'company' => $c_name,
+                        'taxid' => $full_taxid,
+                        'docid' => $base_ruc,
+                        'phone' => '',
+                        'email' => '',
+                        'address' => 'Paraguay',
+                        'city' => 'Asunción',
+                        'country' => 'Paraguay',
+                        'gid' => 1,
+                        'loc' => $this->aauth->get_user()->loc ?: 0
+                    ];
+                    $this->db->insert('geopos_customers', $new_cust);
+                    $customer_id = (int)$this->db->insert_id();
+                }
+            } elseif (empty($customer_id) || $customer_id == 0) {
+                $customer_id = 1;
+            }
+
+            if (empty($order_name) && !empty($pay_customer_name)) {
+                $order_name = $pay_customer_name;
+            }
+
             if ($customer_id == 0) {
-                echo json_encode(array('status' => 'Error', 'message' =>
-                    $this->lang->line('Please add a new client')));
-                exit;
+                $customer_id = 1;
             }
             $this->db->trans_start();
             //products
@@ -744,14 +866,32 @@ class Pos_invoices extends CI_Controller
 
 
             //card process
-            //card process
             if ($invoice_true) {
-                $gateway = $this->input->post('gateway', true);
-                setcookie("pos_set", base_url('pos_invoices/view?id=' . $invocieno), time() + 30 * 24 * 60 * 60, '/');
-                $validtoken = hash_hmac('ripemd160', $invocieno, $this->config->item('encryption_key'));
-                $quckpay = base_url() . "billing/card?id=$invocieno&itype=inv&token=$validtoken&gid=$gateway";
+                $sifen_res = null;
+                try {
+                    $this->load->library('sifen');
+                    $sifen_cfg = $this->sifen->get_config();
+                    if (!empty($sifen_cfg['habilitado'])) {
+                        $sifen_res = $this->sifen->procesar_factura_sifen($invocieno);
+                    }
+                } catch (\Throwable $e) {
+                    log_message('error', 'SIFEN Card Sale Error: ' . $e->getMessage());
+                }
 
-                if ($transok) echo json_encode(array('status' => 'Success', 'message' => $this->lang->line('Invoice Success') . " <script type='text/javascript' >window.location.replace('$quckpay');</script><a target='_blank' href='$quckpay' class='btn btn-blue btn-lg'><span class='icon-printer' aria-hidden='true'></span> " . $this->lang->line('Pay') . "  </a> &nbsp; &nbsp;    <a target='_blank' href='thermal_pdf?id=$invocieno' class='btn btn-blue btn-lg'><span class='icon-printer' aria-hidden='true'></span> " . $this->lang->line('Print') . "  </a> &nbsp; &nbsp;    &nbsp; &nbsp; <a href='view?id=$invocieno' class='btn btn-purple btn-lg'><span class='icon-file-text2' aria-hidden='true'></span> " . $this->lang->line('View') . "  </a> &nbsp; &nbsp; <a href='$link' class='btn btn-blue-grey btn-lg'><span class='icon-earth' aria-hidden='true'></span> " . $this->lang->line('Public View') . " </a> <a href='create?v2=$v2' class='btn btn-amber btn-lg'><span class='fa fa-plus-circle' aria-hidden='true'></span> " . $this->lang->line('Create') . "  </a>"));
+                $ticket_url = base_url("pos_invoices/ticket?id=$invocieno");
+                $pdf_url = base_url("pos_invoices/thermal_pdf?id=$invocieno");
+                $create_url = base_url("pos_invoices/create" . (!empty($v2) ? '?v2=true' : ''));
+
+                if ($transok) echo json_encode(array(
+                    'status'       => 'Success',
+                    'invoice_id'   => $invocieno,
+                    'tid'          => $tid,
+                    'sifen_numero' => !empty($sifen_res['sifen_numero']) ? $sifen_res['sifen_numero'] : null,
+                    'ticket_url'   => $ticket_url,
+                    'pdf_url'      => $pdf_url,
+                    'create_url'   => $create_url,
+                    'message'      => $this->lang->line('Invoice Success') . " #" . $tid
+                ));
             }
 
             if ($transok) {
@@ -1160,10 +1300,63 @@ class Pos_invoices extends CI_Controller
             } else {
                 $discstatus = 1;
             }
+
+            // Datos de Factura con RUC ingresados directamente en el modal de cobro
+            $pay_doc_mode = $this->input->post('pay_doc_mode', true);
+            $pay_taxid = trim((string)$this->input->post('pay_taxid', true));
+            $pay_customer_name = trim((string)$this->input->post('pay_customer_name', true));
+
+            if ($pay_doc_mode === 'factura' && !empty($pay_taxid)) {
+                $taxid_clean = trim($pay_taxid);
+                $base_ruc = preg_replace('/[^0-9]/', '', explode('-', $taxid_clean)[0]);
+
+                // 1. Buscar si ya existe el cliente en la base local
+                $this->db->group_start();
+                $this->db->where('taxid', $taxid_clean);
+                $this->db->or_where('taxid', $base_ruc);
+                $this->db->or_where('docid', $base_ruc);
+                $this->db->group_end();
+                $q_cust = $this->db->get('geopos_customers', 1);
+
+                if ($q_cust && $q_cust->num_rows() > 0) {
+                    $row_c = $q_cust->row_array();
+                    $customer_id = (int)$row_c['id'];
+                    if (!empty($pay_customer_name) && (empty($row_c['name']) || $row_c['name'] !== $pay_customer_name)) {
+                        $this->db->where('id', $customer_id);
+                        $this->db->update('geopos_customers', ['name' => $pay_customer_name, 'company' => $pay_customer_name]);
+                    }
+                } else {
+                    $this->load->library('sifen');
+                    $dv = $this->sifen->calcular_dv_ruc($base_ruc);
+                    $full_taxid = (strpos($taxid_clean, '-') !== false) ? $taxid_clean : ($base_ruc . '-' . $dv);
+                    $c_name = !empty($pay_customer_name) ? $pay_customer_name : ('Cliente ' . $full_taxid);
+
+                    $new_cust = [
+                        'name' => $c_name,
+                        'company' => $c_name,
+                        'taxid' => $full_taxid,
+                        'docid' => $base_ruc,
+                        'phone' => '',
+                        'email' => '',
+                        'address' => 'Paraguay',
+                        'city' => 'Asunción',
+                        'country' => 'Paraguay',
+                        'gid' => 1,
+                        'loc' => $this->aauth->get_user()->loc ?: 0
+                    ];
+                    $this->db->insert('geopos_customers', $new_cust);
+                    $customer_id = (int)$this->db->insert_id();
+                }
+            } elseif (empty($customer_id) || $customer_id == 0) {
+                $customer_id = 1;
+            }
+
+            if (empty($order_name) && !empty($pay_customer_name)) {
+                $order_name = $pay_customer_name;
+            }
+
             if ($customer_id == 0) {
-                echo json_encode(array('status' => 'Error', 'message' =>
-                    $this->lang->line('Please add a new client')));
-                exit;
+                $customer_id = 1;
             }
             $this->db->trans_start();
             $transok = true;
@@ -1407,6 +1600,25 @@ class Pos_invoices extends CI_Controller
         $this->load->model('customers_model', 'customers');
         $this->customers->add($name, $company, $phone, $email, $address, $city, $region, $country, $postbox, $customergroup, $taxid, $name_s, $phone_s, $email_s, $address_s, $city_s, $region_s, $country_s, $postbox_s,'', '', '', '', $custom);
 
+    }
+
+    /**
+     * Consulta de RUC / Cédula en DNIT Paraguay (ex-SET Marangatu) para POS
+     */
+    public function consulta_ruc()
+    {
+        $ruc = $this->input->get_post('ruc', true);
+        if (!$ruc) {
+            $ruc = $this->input->get_post('term', true);
+        }
+        $auto_create = (bool)$this->input->get_post('auto_create');
+
+        $this->load->library('sifen');
+        $result = $this->sifen->consultar_ruc($ruc, $auto_create);
+
+        $this->output
+            ->set_content_type('application/json')
+            ->set_output(json_encode($result));
     }
 
     public function file_handling()
@@ -1786,6 +1998,33 @@ echo 6;
         $data['width'] = ($this->input->get('width') == '58') ? 58 : 80;
         $data['autoprint'] = ($this->input->get('print') !== '0');
         $this->load->view('print_files/pos_ticket_html', $data);
+    }
+
+    public function download_dte()
+    {
+        $tid = (int)$this->input->get('id');
+        if (!$tid) {
+            exit('ID de factura no válido');
+        }
+        $invoice = $this->invocies->invoice_details($tid, $this->limited);
+        if (empty($invoice['id']) || empty($invoice['sifen_xml'])) {
+            exit('No hay archivo XML DTE asociado a esta factura');
+        }
+        $xml_file = FCPATH . $invoice['sifen_xml'];
+        if (!file_exists($xml_file)) {
+            exit('El archivo XML no se encuentra en el servidor');
+        }
+
+        $filename = basename($xml_file);
+        header('Content-Description: File Transfer');
+        header('Content-Type: application/xml');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate');
+        header('Pragma: public');
+        header('Content-Length: ' . filesize($xml_file));
+        readfile($xml_file);
+        exit;
     }
 
 

@@ -65,6 +65,8 @@ $route['api/example/users/(:num)(\.)([a-zA-Z0-9_-]+)(.*)'] = 'api/example/users/
 | -------------------------------------------------------------------------
 */
 $route['api/ping'] = 'api/ping';
+$route['api/config'] = 'api/config';
+$route['api/info'] = 'api/config';
 $route['api/products'] = 'api/products';
 $route['api/products/(:num)'] = 'api/products/$1';
 $route['api/customers'] = 'api/customers';
@@ -74,3 +76,7 @@ $route['api/orders/(:num)'] = 'api/orders/$1';
 $route['api/orders/(:num)/status'] = 'api/order_status/$1';
 $route['api/order_status'] = 'api/order_status';
 $route['api/ticket/(:num)'] = 'api/ticket/$1';
+
+// Rutas Facturación Electrónica SIFEN Paraguay
+$route['sifen_config'] = 'sifen_config';
+$route['sifen_config/(:any)'] = 'sifen_config/$1';

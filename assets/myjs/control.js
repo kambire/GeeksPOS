@@ -48,9 +48,50 @@ function PselectCustomer(cid, cname, discount) {
     $('#customer_id').val(cid);
     $('#custom_discount').val(discount);
 
-    $('#customer_name').html('<strong>' + cname + '</strong>');
+    $('#customer_name').html('<strong>' + cname + '</strong>' + ' <a href="javascript:resetDefaultCustomer()" class="text-danger ml-1" title="Quitar cliente / Consumidor Final" style="font-size:13px;"><i class="fa fa-times-circle"></i></a>');
     $("#customer-box-result").hide();
     $("#customer").show();
+}
+
+function PselectCustomerFull(cid, cname, taxid, discount) {
+    $('#customer_id').val(cid);
+    $('#custom_discount').val(discount || 0);
+
+    var tax_badge = (taxid && taxid.trim() !== '') ? ' <span class="badge badge-info" style="font-size:11.5px; background:#0284c7; color:#fff;"><i class="fa fa-id-card-o"></i> ' + taxid + '</span>' : '';
+    var clear_btn = ' <a href="javascript:resetDefaultCustomer()" class="text-danger ml-1" title="Quitar cliente / Consumidor Final" style="font-size:13px;"><i class="fa fa-times-circle"></i></a>';
+
+    $('#customer_name').html('<strong>' + cname + '</strong>' + tax_badge + clear_btn);
+    $("#customer-box-result").hide();
+    $("#customer").show();
+}
+
+function resetDefaultCustomer() {
+    $('#customer_id').val(1);
+    $('#custom_discount').val(0);
+    $('#customer_name').html('Predeterminado: <strong>Walk In (Consumidor Final)</strong>');
+}
+
+function posSeleccionarYCrearDNIT(ruc) {
+    $("#customer-box-result").html('<div class="p-2 text-center text-primary" style="background:#fff; border:1px solid #ddd; border-radius:4px;"><i class="fa fa-spinner fa-spin"></i> Registrando cliente de DNIT en el sistema...</div>');
+    $.ajax({
+        type: "POST",
+        url: baseurl + 'pos_invoices/consulta_ruc',
+        data: { ruc: ruc, auto_create: 1, [crsf_token]: crsf_hash },
+        dataType: 'json',
+        success: function(res) {
+            if (res.status === 'Success' && res.customer_id) {
+                PselectCustomerFull(res.customer_id, res.name, res.taxid, 0);
+                $("#pos-customer-box").val('');
+            } else {
+                alert(res.message || 'No se pudo registrar el cliente desde DNIT.');
+                $("#customer-box-result").hide();
+            }
+        },
+        error: function() {
+            alert('Error de conexión al consultar DNIT.');
+            $("#customer-box-result").hide();
+        }
+    });
 }
 
 function selectSupplier(cid, cname, cadd1, cadd2, ph, email) {
@@ -764,7 +805,8 @@ function searchCS(actionurl) {
                     $("#statusMsg").removeClass("alert-warning").addClass("alert-success").fadeIn();
                     $("html, body").animate({scrollTop: $('html, body').offset().top}, 200);
                     $('#customer_id').val(data.cid);
-                    $('#customer_name').html('<strong>' + $('#mcustomer_name').val() + '</strong>');
+                    var new_tax = $('#mcustomer_taxid').val() || '';
+                    PselectCustomerFull(data.cid, $('#mcustomer_name').val(), new_tax, data.discount);
                     $('#customer_address1').html('<strong>' + $('#mcustomer_address1').val() + '<br>' + $('#mcustomer_city').val() + ',' + $('#mcustomer_country').val() + '</strong>');
                     $('#customer_phone').html('Phone: <strong>' + $('#mcustomer_phone').val() + '</strong><br>Email: <strong>' + $('#mcustomer_email').val() + '</strong>');
                     $('#customer_pass').html('Login Password ' + data.pass);

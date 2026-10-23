@@ -114,6 +114,10 @@
                                                                         class="ft-chevron-right"></i> <?php echo $this->lang->line('company_settings') ?>
                                                             </a></li>
                                                         <li><a class="dropdown-item"
+                                                               href="<?php echo base_url(); ?>sifen_config"><i
+                                                                        class="ft-chevron-right"></i> Facturación SIFEN (PY)
+                                                            </a></li>
+                                                        <li><a class="dropdown-item"
                                                                href="<?php echo base_url(); ?>locations"><i
                                                                         class="ft-chevron-right"></i><?php echo $this->lang->line('Business Locations') ?>
                                                             </a></li>
@@ -630,6 +634,11 @@
                                     class="icon-handbag"></i><span><?= $this->lang->line('POS') ?></span></a>
                     </li>
                 <?php } ?>
+                <?php if ($this->aauth->get_user()->roleid >= 4) { ?>
+                    <li class="nav-item <?php if ($this->li_a == "sifen") echo ' active'; ?>"><a href="<?= base_url(); ?>sifen_config"><i
+                                    class="fa fa-certificate text-danger"></i><span>Facturación SIFEN</span></a>
+                    </li>
+                <?php } ?>
             <?php
             if ($this->aauth->premission(1)) { ?>
                 <li class="nav-item has-sub <?php if ($this->li_a == "sales") {
@@ -662,6 +671,12 @@
 
                                 <li class="menu-item"><a
                                             href="<?php echo base_url(); ?>invoices"><?php echo $this->lang->line('Manage Invoices'); ?></a>
+                                </li>
+                                <?php if ($this->aauth->get_user()->roleid >= 4) { ?>
+                                <li class="menu-item"><a
+                                            href="<?php echo base_url(); ?>sifen_config"><i class="fa fa-certificate text-danger"></i> Facturación SIFEN (PY)</a>
+                                </li>
+                                <?php } ?>
                             </ul>
                         </li>
                         <li class="menu-item"><a href="#"><i

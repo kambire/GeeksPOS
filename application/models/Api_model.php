@@ -1,6 +1,7 @@
 <?php
 /**
- * GeeksPOS - REST API Model for n8n & WhatsApp Integration
+ * GeeksPOS - REST API Model for Multi-System Integration
+ * Supporting n8n, WhatsApp Bots, Ecommerce, Delivery Apps & External POS
  */
 defined('BASEPATH') or exit('No direct script access allowed');
 
@@ -9,7 +10,22 @@ class Api_model extends CI_Model
     public function __construct()
     {
         parent::__construct();
+        $this->load->library('Aauth');
+        $this->load->library('Custom');
         $this->load->model('billing_model', 'billing');
+        $this->config->load('api_config', false, true);
+    }
+
+    /**
+     * Resolves the configured public base URL or falls back to CodeIgniter's base_url()
+     */
+    public function get_base_url()
+    {
+        $custom = $this->config->item('api_public_base_url');
+        if (!empty($custom)) {
+            return rtrim($custom, '/') . '/';
+        }
+        return base_url();
     }
 
     /**
@@ -68,7 +84,6 @@ class Api_model extends CI_Model
 
         if (!empty($phone)) {
             $clean_phone = preg_replace('/[^0-9]/', '', $phone);
-            // Search exact or matching the last 7-9 digits
             $this->db->group_start();
             $this->db->like('phone', $clean_phone);
             $this->db->or_like('phone', $phone);
@@ -114,7 +129,6 @@ class Api_model extends CI_Model
             $name = !empty($phone) ? "Cliente $phone" : "Cliente WhatsApp";
         }
 
-        // If no ID, check if phone already exists
         if ($id <= 0 && !empty($phone)) {
             $existing = $this->get_customers(null, $phone);
             if ($existing) {
@@ -147,11 +161,16 @@ class Api_model extends CI_Model
     }
 
     /**
-     * Create an order & invoice from n8n / WhatsApp
+     * Create an order & invoice from external systems (n8n, Ecommerce, Delivery App, etc.)
      */
-    public function create_order($payload)
+    public function create_order($payload, $system = 'n8n_whatsapp')
     {
         $this->db->trans_start();
+
+        // 0. Load System Defaults from Config
+        $defaults = $this->config->item('api_defaults') ?: [];
+        $systems = $this->config->item('api_systems') ?: [];
+        $sys_cfg = isset($systems[$system]) ? $systems[$system] : null;
 
         // 1. Resolve Customer
         $customer_id = isset($payload['customer_id']) ? (int)$payload['customer_id'] : 0;
@@ -169,31 +188,33 @@ class Api_model extends CI_Model
         }
 
         if ($customer_id <= 0) {
-            $customer_id = 1; // Fallback to Walk-in client
+            $customer_id = $defaults['customer_id'] ?? 1; // Fallback to Walk-in client
         }
 
-        // Get customer info for response
         $customer_info = $this->get_customers($customer_id);
 
-        // 2. Order Metadata
+        // 2. Order Metadata & Multi-System Tagging
         $order_name = isset($payload['order_name']) ? trim($payload['order_name']) : '';
         if (empty($order_name) && !empty($customer_info['name'])) {
             $order_name = $customer_info['name'];
         }
 
-        $order_type = isset($payload['order_type']) ? strtolower(trim($payload['order_type'])) : 'delivery';
-        $valid_types = ['delivery', 'pickup', 'dinein', 'local', 'pasa a buscar'];
+        $default_type = $sys_cfg['default_order_type'] ?? 'delivery';
+        $order_type = isset($payload['order_type']) ? strtolower(trim($payload['order_type'])) : $default_type;
+        $valid_types = $this->config->item('api_allowed_order_types') ?: ['delivery', 'pickup', 'dinein', 'local', 'pasa a buscar'];
         if (!in_array($order_type, $valid_types)) {
-            $order_type = 'delivery';
+            $order_type = $default_type;
         }
 
         $notes = isset($payload['notes']) ? trim($payload['notes']) : '';
         $shipping = isset($payload['shipping']) ? (float)$payload['shipping'] : 0.00;
         $discount = isset($payload['discount']) ? (float)$payload['discount'] : 0.00;
-        $pmethod = isset($payload['payment_method']) ? trim($payload['payment_method']) : 'Cash';
-        $payment_status = isset($payload['payment_status']) ? strtolower(trim($payload['payment_status'])) : 'due';
+        $pmethod = isset($payload['payment_method']) ? trim($payload['payment_method']) : ($defaults['payment_method'] ?? 'Cash');
+        $payment_status = isset($payload['payment_status']) ? strtolower(trim($payload['payment_status'])) : ($defaults['payment_status'] ?? 'due');
         $card_txn = isset($payload['card_txn']) ? trim($payload['card_txn']) : '';
-        $employee_id = isset($payload['employee_id']) ? (int)$payload['employee_id'] : 11;
+        $employee_id = isset($payload['employee_id']) ? (int)$payload['employee_id'] : ($defaults['employee_id'] ?? 11);
+        $loc_id = isset($payload['location_id']) ? (int)$payload['location_id'] : ($defaults['location_id'] ?? 0);
+        $system_tag = !empty($system) ? substr($system, 0, 20) : 'api';
 
         // 3. Sequential Invoice Number (tid)
         $this->db->select('tid');
@@ -222,7 +243,6 @@ class Api_model extends CI_Model
             $qty = isset($item['qty']) ? (float)$item['qty'] : 1.0;
             if ($qty <= 0) $qty = 1.0;
 
-            // Find product
             $p = null;
             if ($pid > 0) {
                 $p = $this->get_products($pid);
@@ -296,14 +316,14 @@ class Api_model extends CI_Model
             'taxstatus' => 'no',
             'discstatus' => 0,
             'format_discount' => '%',
-            'refer' => 'n8n-whatsapp',
+            'refer' => $system_tag,
             'order_name' => $order_name,
             'order_type' => $order_type,
             'card_txn' => $card_txn,
             'term' => 1,
             'multi' => 0,
             'i_class' => 1,
-            'loc' => 0,
+            'loc' => $loc_id,
             'r_time' => $bill_time
         ];
 
@@ -319,7 +339,7 @@ class Api_model extends CI_Model
         // 7. Payment Registration if paid
         if ($status === 'paid' && $pamnt > 0) {
             $tnote = '#' . $invocieno . '-' . $pmethod;
-            $this->billing->paynow($invoice_id, $pamnt, $tnote, $pmethod, 0, $bill_date, 1);
+            $this->billing->paynow($invoice_id, $pamnt, $tnote, $pmethod, $loc_id, $bill_date, 0);
         }
 
         $this->db->trans_complete();
@@ -328,17 +348,44 @@ class Api_model extends CI_Model
             return ['status' => false, 'message' => 'Failed to save order in database'];
         }
 
-        // 8. Build URLs & Response
+        // 7.1 SIFEN Paraguay Electronic Invoice Processing (DNIT v150)
+        $sifen_data = null;
+        try {
+            $this->load->library('sifen');
+            $sifen_cfg = $this->sifen->get_config();
+            if (!empty($sifen_cfg['habilitado'])) {
+                $sifen_res = $this->sifen->procesar_factura_sifen($invoice_id);
+                if (!empty($sifen_res['status'])) {
+                    $sifen_data = [
+                        'cdc'            => $sifen_res['cdc'],
+                        'cdc_formatted'  => $sifen_res['cdc_formato'] ?? $this->sifen->formatear_cdc($sifen_res['cdc']),
+                        'invoice_number' => $sifen_res['sifen_numero'],
+                        'qr_url'         => $sifen_res['sifen_qr'],
+                        'vat_10'         => $sifen_res['iva_10'],
+                        'vat_5'          => $sifen_res['iva_5'],
+                        'vat_total'      => $sifen_res['iva_total']
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'SIFEN API Sale Error: ' . $e->getMessage());
+        }
+
+        // 8. Build URLs & Response using configured base_url
+        $base = $this->get_base_url();
         $token = hash_hmac('ripemd160', $invoice_id, $this->config->item('encryption_key'));
-        $ticket_url = base_url("pos_invoices/ticket?id=$invoice_id&token=$token");
-        $pdf_url = base_url("pos_invoices/thermal_pdf?id=$invoice_id&token=$token");
+        $paper_w = isset($payload['paper_width']) ? (int)$payload['paper_width'] : ($sys_cfg['paper_width'] ?? ($defaults['thermal_paper_width'] ?? 80));
+        $ticket_url = $base . "pos_invoices/ticket?id=$invoice_id&token=$token&width=$paper_w";
+        $pdf_url = $base . "pos_invoices/thermal_pdf?id=$invoice_id&token=$token";
 
         return [
             'status' => true,
             'message' => 'Order created successfully',
+            'system' => $system_tag,
             'order' => [
                 'id' => $invoice_id,
                 'invoice_number' => $invocieno,
+                'system' => $system_tag,
                 'order_name' => $order_name,
                 'order_type' => $order_type,
                 'status' => $status,
@@ -353,7 +400,8 @@ class Api_model extends CI_Model
                 'items_count' => count($batch_items),
                 'created_at' => $bill_date . ' ' . $bill_time,
                 'ticket_url' => $ticket_url,
-                'pdf_url' => $pdf_url
+                'pdf_url' => $pdf_url,
+                'sifen' => $sifen_data
             ]
         ];
     }
@@ -378,9 +426,10 @@ class Api_model extends CI_Model
         $this->db->where('tid', (int)$id);
         $order['items'] = $this->db->get()->result_array();
 
+        $base = $this->get_base_url();
         $token = hash_hmac('ripemd160', $id, $this->config->item('encryption_key'));
-        $order['ticket_url'] = base_url("pos_invoices/ticket?id=$id&token=$token");
-        $order['pdf_url'] = base_url("pos_invoices/thermal_pdf?id=$id&token=$token");
+        $order['ticket_url'] = $base . "pos_invoices/ticket?id=$id&token=$token";
+        $order['pdf_url'] = $base . "pos_invoices/thermal_pdf?id=$id&token=$token";
 
         return $order;
     }
@@ -390,7 +439,7 @@ class Api_model extends CI_Model
      */
     public function get_orders($status = null, $order_type = null, $customer_id = null, $limit = 20, $offset = 0)
     {
-        $this->db->select('i.id, i.tid AS invoice_number, i.invoicedate, i.r_time, i.subtotal, i.shipping, i.total, i.pmethod, i.status, i.order_name, i.order_type, i.notes, i.csd AS customer_id, c.name AS customer_name, c.phone AS customer_phone');
+        $this->db->select('i.id, i.tid AS invoice_number, i.invoicedate, i.r_time, i.subtotal, i.shipping, i.total, i.pmethod, i.status, i.order_name, i.order_type, i.notes, i.refer AS system, i.csd AS customer_id, i.cdc, i.sifen_numero, i.sifen_estado, c.name AS customer_name, c.phone AS customer_phone');
         $this->db->from('geopos_invoices i');
         $this->db->join('geopos_customers c', 'c.id = i.csd', 'left');
         $this->db->where('i.i_class', 1);
@@ -409,10 +458,11 @@ class Api_model extends CI_Model
         $this->db->limit((int)$limit, (int)$offset);
         $list = $this->db->get()->result_array();
 
+        $base = $this->get_base_url();
         foreach ($list as &$o) {
             $token = hash_hmac('ripemd160', $o['id'], $this->config->item('encryption_key'));
-            $o['ticket_url'] = base_url("pos_invoices/ticket?id=" . $o['id'] . "&token=$token");
-            $o['pdf_url'] = base_url("pos_invoices/thermal_pdf?id=" . $o['id'] . "&token=$token");
+            $o['ticket_url'] = $base . "pos_invoices/ticket?id=" . $o['id'] . "&token=$token";
+            $o['pdf_url'] = $base . "pos_invoices/thermal_pdf?id=" . $o['id'] . "&token=$token";
         }
 
         return $list;
@@ -425,7 +475,7 @@ class Api_model extends CI_Model
     {
         $id = (int)$id;
         $status = strtolower(trim($status));
-        $valid = ['paid', 'due', 'canceled', 'partial'];
+        $valid = $this->config->item('api_allowed_statuses') ?: ['paid', 'due', 'canceled', 'partial'];
 
         if (!in_array($status, $valid)) {
             return ['status' => false, 'message' => "Invalid status: $status. Allowed: " . implode(', ', $valid)];
@@ -440,5 +490,64 @@ class Api_model extends CI_Model
         $this->db->update('geopos_invoices', $data);
 
         return ['status' => true, 'message' => 'Status updated successfully', 'id' => $id, 'status_updated' => $status];
+    }
+
+    /**
+     * Webhook Dispatcher: Sends POST to the external system (e.g. n8n) when status changes
+     */
+    public function dispatch_webhook($order_id, $status, $notes = null)
+    {
+        $webhooks_cfg = $this->config->item('api_webhooks');
+        if (empty($webhooks_cfg['enabled'])) {
+            return false;
+        }
+
+        $order = $this->get_order_details($order_id);
+        if (!$order) {
+            return false;
+        }
+
+        $refer = $order['refer'];
+        $systems = $this->config->item('api_systems') ?: [];
+        $webhook_url = !empty($systems[$refer]['webhook_url']) ? $systems[$refer]['webhook_url'] : null;
+
+        if (!$webhook_url) {
+            return false;
+        }
+
+        $token = hash_hmac('ripemd160', $order_id, $this->config->item('encryption_key'));
+        $payload = [
+            'event'          => 'order_status_updated',
+            'order_id'       => (int)$order_id,
+            'invoice_number' => (int)$order['tid'],
+            'system'         => $refer,
+            'order_name'     => $order['order_name'],
+            'order_type'     => $order['order_type'],
+            'status'         => $status,
+            'notes'          => $notes ?: $order['notes'],
+            'customer'       => [
+                'name'  => $order['customer_name'],
+                'phone' => $order['customer_phone']
+            ],
+            'total'          => (float)$order['total'],
+            'ticket_url'     => $this->get_base_url() . "pos_invoices/ticket?id=$order_id&token=$token",
+            'timestamp'      => date('Y-m-d H:i:s')
+        ];
+
+        $timeout = isset($webhooks_cfg['timeout']) ? (int)$webhooks_cfg['timeout'] : 3;
+        $ch = curl_init($webhook_url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'User-Agent: GeeksPOS-Webhook-Dispatcher/1.0'
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        @curl_exec($ch);
+        curl_close($ch);
+
+        return true;
     }
 }
