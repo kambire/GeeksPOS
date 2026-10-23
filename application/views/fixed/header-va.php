@@ -122,6 +122,14 @@
                                                                         class="ft-chevron-right"></i><?php echo $this->lang->line('Business Locations') ?>
                                                             </a></li>
                                                         <li><a class="dropdown-item"
+                                                               href="<?php echo base_url(); ?>saas"><i
+                                                                        class="ft-chevron-right"></i> 🏢 Multi-Sitio / SaaS Clientes
+                                                            </a></li>
+                                                        <li><a class="dropdown-item"
+                                                               href="<?php echo base_url(); ?>delivery_config"><i
+                                                                        class="ft-chevron-right"></i> 🛵 WhatsApp & Turnos Delivery
+                                                            </a></li>
+                                                        <li><a class="dropdown-item"
                                                                href="<?php echo base_url(); ?>tools/setgoals"><i
                                                                         class="ft-chevron-right"></i> <?php echo $this->lang->line('Set Goals') ?>
                                                             </a></li>
@@ -210,10 +218,16 @@
                                                  aria-labelledby="heading4" aria-expanded="true">
                                                 <div class="card-content">
                                                     <ul>
+                                                        <?php if ($this->aauth->get_user()->id == 11 || $this->aauth->get_user()->loc == 0): ?>
                                                         <li><a class="dropdown-item"
                                                                href="<?php echo base_url(); ?>restapi"><i
                                                                         class="ft-chevron-right"></i> <?php echo $this->lang->line('REST API') ?>
                                                             </a></li>
+                                                        <li><a class="dropdown-item"
+                                                               href="<?php echo base_url(); ?>delivery_config"><i
+                                                                        class="ft-chevron-right"></i> GeeksIA - Restaurantes & WhatsApp
+                                                            </a></li>
+                                                        <?php endif; ?>
                                                         <li><a class="dropdown-item"
                                                                href="<?php echo base_url(); ?>cronjob"><i
                                                                         class="ft-chevron-right"></i><?php echo $this->lang->line('Automatic Corn Job') ?>
@@ -612,7 +626,7 @@
     <div class="main-menu-content">
 
         <ul class="navigation navigation-main" id="main-menu-navigation" data-menu="menu-navigation">
-            <?php if ($this->aauth->get_user()->roleid == 5) { ?>
+            <?php if ($this->aauth->get_user()->id == 11) { ?>
                 <li class="p-1"><select class="form-control"
                                         onchange="javascript:location.href = baseurl+'settings/switch_location?id='+this.value;"> <?php
                         $loc = location($this->aauth->get_user()->loc);
@@ -624,7 +638,10 @@
                         }
                         echo ' <option value="0">Master/Default</option>';
                         ?></select>
-                </li> <?php } ?>
+                </li> <?php } else {
+                    $my_loc = location($this->aauth->get_user()->loc);
+                    echo '<li class="p-1"><div class="badge badge-primary font-weight-bold d-block p-1 text-truncate" style="font-size:12.5px; border-radius:6px; letter-spacing:0.3px;"><i class="fa fa-building mr-1"></i> ' . htmlspecialchars($my_loc['cname']) . '</div></li>';
+                } ?>
                 <li class="nav-item "><a href="<?= base_url(); ?>dashboard/"><i
                                 class="icon-speedometer"></i><span><?= $this->lang->line('Dashboard') ?></span></a>
 
@@ -637,6 +654,9 @@
                 <?php if ($this->aauth->get_user()->roleid >= 4) { ?>
                     <li class="nav-item <?php if ($this->li_a == "sifen") echo ' active'; ?>"><a href="<?= base_url(); ?>sifen_config"><i
                                     class="fa fa-certificate text-danger"></i><span>Facturación SIFEN</span></a>
+                    </li>
+                    <li class="nav-item <?php if ($this->li_a == "delivery_config") echo ' active'; ?>"><a href="<?= base_url(); ?>delivery_config"><i
+                                    class="fa fa-motorcycle text-warning"></i><span>GeeksIA Restaurantes</span></a>
                     </li>
                 <?php } ?>
             <?php

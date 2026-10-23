@@ -200,7 +200,7 @@ class Sifen_config extends CI_Controller
             $config['establecimiento'],
             $config['punto_expedicion'],
             $config['secuencia_actual'],
-            2,
+            $this->sifen->tipo_contribuyente($config['ruc'], $config['tipo_contribuyente'] ?? null),
             date('Y-m-d')
         );
 
@@ -225,5 +225,94 @@ class Sifen_config extends CI_Controller
             'qr_url'       => $qr_url,
             'qr_preview'   => $qr_data_uri
         ]);
+    }
+
+    /**
+     * Panel de pruebas de los servicios web (Guía de Pruebas e-kuatia)
+     */
+    public function pruebas()
+    {
+        $head['usernm'] = $this->aauth->get_user()->username;
+        $head['title']  = 'Pruebas SIFEN';
+
+        $data['config'] = $this->sifen->get_config();
+        $data['facturas'] = $this->db->select('id, tid, invoicedate, total, cdc, sifen_numero, sifen_estado')
+            ->from('geopos_invoices')->where('cdc IS NOT NULL')->where("cdc <> ''")
+            ->order_by('id', 'DESC')->limit(50)->get()->result_array();
+        $data['log'] = $this->db->select('id, operacion, ambiente, invoice_id, cdc, referencia, estado, codigo, mensaje, protocolo, http_code, created_at')
+            ->from('geopos_sifen_log')->order_by('id', 'DESC')->limit(50)->get()->result_array();
+
+        // Avance de las pruebas mínimas de la Guía de Pruebas (solo Factura Electrónica, ambiente test)
+        $cuenta = function ($where) {
+            return (int)$this->db->where('ambiente', 'test')->where($where)->count_all_results('geopos_sifen_log');
+        };
+        $data['avance'] = [
+            ['Facturas aprobadas por WS síncrono', $cuenta("operacion = 'recibe' AND estado LIKE 'Aprobado%'"), 5],
+            ['Facturas rechazadas por WS síncrono (datos con error)', $cuenta("operacion = 'recibe' AND estado = 'Rechazado'"), 5],
+            ['Lotes recibidos por WS asíncrono', $cuenta("operacion = 'recibe-lote' AND codigo = '0300'"), 2],
+            ['Consultas de lote concluidas', $cuenta("operacion = 'consulta-lote' AND codigo = '0362'"), 2],
+            ['Consultas de DTE por CDC', $cuenta("operacion = 'consulta' AND codigo = '0422'"), 3],
+            ['Consulta de RUC', $cuenta("operacion = 'consulta-ruc' AND codigo = '0502'"), 1],
+            ['Cancelaciones aprobadas', $cuenta("operacion = 'evento' AND referencia = 'cancelacion' AND estado LIKE 'Aprobado%'"), 5],
+            ['Inutilizaciones de facturas aprobadas', $cuenta("operacion = 'evento' AND referencia = 'inutilizacion' AND estado LIKE 'Aprobado%'"), 2]
+        ];
+
+        $this->load->view('fixed/header', $head);
+        $this->load->view('sifen/pruebas', $data);
+        $this->load->view('fixed/footer');
+    }
+
+    /**
+     * Operaciones AJAX contra los servicios web de SIFEN
+     */
+    public function operacion()
+    {
+        $op = $this->input->post('op', true);
+        switch ($op) {
+            case 'enviar':
+                $res = $this->sifen->enviar_de((int)$this->input->post('id'));
+                break;
+            case 'regenerar':
+                $res = $this->sifen->regenerar_xml((int)$this->input->post('id'));
+                unset($res['doc']);
+                break;
+            case 'consultar':
+                $res = $this->sifen->consultar_de($this->input->post('cdc', true));
+                break;
+            case 'ruc':
+                $res = $this->sifen->consultar_ruc_sifen($this->input->post('ruc', true));
+                break;
+            case 'lote':
+                $res = $this->sifen->enviar_lote((array)$this->input->post('ids'));
+                break;
+            case 'consultar_lote':
+                $res = $this->sifen->consultar_lote($this->input->post('lote', true));
+                break;
+            case 'cancelar':
+                $res = $this->sifen->evento_cancelacion($this->input->post('cdc', true), $this->input->post('motivo', true));
+                break;
+            case 'inutilizar':
+                $res = $this->sifen->evento_inutilizacion(
+                    $this->input->post('desde'),
+                    $this->input->post('hasta'),
+                    $this->input->post('motivo', true),
+                    (int)$this->input->post('tipo')
+                );
+                break;
+            default:
+                $res = ['status' => false, 'message' => 'Operación no válida.'];
+        }
+        $this->output->set_content_type('application/json')->set_output(json_encode($res));
+    }
+
+    /**
+     * Request y response XML de una operación registrada (para revisar mensajes de SIFEN)
+     */
+    public function log_detalle($id = 0)
+    {
+        $row = $this->db->select('id, operacion, request, response')
+            ->get_where('geopos_sifen_log', ['id' => (int)$id])->row_array();
+        $this->output->set_content_type('application/json')
+            ->set_output(json_encode($row ?: ['status' => false, 'message' => 'Registro no encontrado.']));
     }
 }

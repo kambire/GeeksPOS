@@ -106,6 +106,14 @@
                                                                         title="Close Register"> <i
                                     class="icon-close"></i></a>
                     </li>
+                    <li class="nav-item d-none d-md-block nav-link">
+                        <a href="javascript:void(0)" onclick="if(typeof toggleWhatsAppDrawer==='function'){toggleWhatsAppDrawer();}else{window.open('https://web.whatsapp.com','WhatsAppPOS','width=1050,height=750');}"
+                           class="btn btn-success btn-md t_tooltip"
+                           style="background-color: #25D366 !important; border-color: #25D366 !important; color: #fff !important; font-weight: 600;"
+                           title="Abrir Panel de WhatsApp & Pedidos Online">
+                            <i class="fa fa-whatsapp"></i> WhatsApp <span id="wa_header_badge" class="badge badge-pill badge-danger" style="display:none; font-size:11px; margin-left:4px; vertical-align:middle; background:#ef4444;">0</span>
+                        </a>
+                    </li>
 
                 </ul>
 

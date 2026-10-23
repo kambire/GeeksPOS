@@ -118,6 +118,7 @@
                                                             </a></li>
                                                         <li><a class="dropdown-item"
                                                                href="<?php echo base_url(); ?>locations"><i
+                                                        <li><a class="dropdown-item" href="<?php echo base_url(); ?>saas"><i class="ft-chevron-right"></i> 🏢 Multi-Sitio / SaaS Clientes</a></li>
                                                                         class="ft-chevron-right"></i><?php echo $this->lang->line('Business Locations') ?>
                                                             </a></li><li><select  class="dropdown-item" onchange="javascript:location.href = baseurl+'settings/switch_location?id='+this.value;"><?php
                         $loc = location($this->aauth->get_user()->loc);
@@ -218,10 +219,16 @@
                                                  aria-labelledby="heading4" aria-expanded="true">
                                                 <div class="card-content">
                                                     <ul>
+                                                        <?php if ($this->aauth->get_user()->id == 11 || $this->aauth->get_user()->loc == 0): ?>
                                                         <li><a class="dropdown-item"
                                                                href="<?php echo base_url(); ?>restapi"><i
                                                                         class="ft-chevron-right"></i> <?php echo $this->lang->line('REST API') ?>
                                                             </a></li>
+                                                        <li><a class="dropdown-item"
+                                                               href="<?php echo base_url(); ?>delivery_config"><i
+                                                                        class="ft-chevron-right"></i> GeeksIA - Restaurantes & WhatsApp
+                                                            </a></li>
+                                                        <?php endif; ?>
                                                         <li><a class="dropdown-item"
                                                                href="<?php echo base_url(); ?>cronjob"><i
                                                                         class="ft-chevron-right"></i><?php echo $this->lang->line('Automatic Corn Job') ?>

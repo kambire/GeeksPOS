@@ -784,6 +784,10 @@ FROM geopos_invoices AS i LEFT JOIN geopos_customers AS c ON i.csd=c.id GROUP BY
 
     public function switch_location()
     {
+        // Solo el Super-Administrador (usuario principal ID 11) puede cambiar de sucursal
+        if ($this->aauth->get_user()->id != 11) {
+            exit('<h3>Acceso restringido: Cada local opera de manera 100% independiente</h3>');
+        }
         $id = $this->input->get('id', true);
         $data = array(
             'loc' => $id

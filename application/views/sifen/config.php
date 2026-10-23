@@ -14,6 +14,9 @@
                 <span class="badge badge-<?= ($config['ambiente'] === 'prod' ? 'danger' : 'info') ?> p-1 font-medium-1">
                     <?= ($config['ambiente'] === 'prod' ? 'PRODUCCIÓN' : 'TEST / HOMOLOGACIÓN') ?>
                 </span>
+                <a href="<?= base_url('sifen_config/pruebas') ?>" class="btn btn-sm btn-primary ml-1">
+                    <i class="fa fa-flask"></i> Pruebas y envíos
+                </a>
             </div>
         </div>
 

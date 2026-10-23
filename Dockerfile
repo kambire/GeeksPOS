@@ -22,8 +22,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Apache: mod_rewrite (para el .htaccess de CI) y mod_headers (cache)
-RUN a2enmod rewrite headers
+# OpenSSL 3: activar el provider "legacy" para poder abrir certificados .p12 con
+# cifrado RC2/3DES (frecuente en los emitidos por prestadores de Paraguay para SIFEN)
+RUN sed -i \
+        -e 's/^default = default_sect$/default = default_sect\nlegacy = legacy_sect/' \
+        -e 's/^# activate = 1$/activate = 1/' \
+        /etc/ssl/openssl.cnf \
+    && printf '\n[legacy_sect]\nactivate = 1\n' >> /etc/ssl/openssl.cnf
+
+# Apache: mod_rewrite, mod_headers, mod_ssl y certificado base
+RUN a2enmod rewrite headers ssl socache_shmcb \
+    && openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+       -keyout /etc/ssl/private/ssl-cert-snakeoil.key \
+       -out /etc/ssl/certs/ssl-cert-snakeoil.pem \
+       -subj "/C=PY/ST=Central/L=Asuncion/O=GeeksPOS/CN=localhost" \
+    && a2ensite default-ssl
 
 # Permitir que el .htaccess del proyecto funcione
 RUN sed -ri 's!AllowOverride None!AllowOverride All!g' /etc/apache2/apache2.conf
@@ -46,4 +59,4 @@ COPY . /var/www/html
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 application/cache application/logs userfiles 2>/dev/null || true
 
-EXPOSE 80
+EXPOSE 80 443

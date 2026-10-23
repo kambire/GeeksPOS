@@ -127,6 +127,16 @@ class Products extends CI_Controller
         $product_name = $this->input->post('product_name', true);
         $catid = $this->input->post('product_cat');
         $warehouse = $this->input->post('product_warehouse');
+        
+        // Multi-Tenant Isolation: Si el usuario pertenece a un local específico, forzar su almacén exclusivo
+        $user_loc = (int)$this->aauth->get_user()->loc;
+        if ($user_loc > 0) {
+            $loc_info = $this->db->where('id', $user_loc)->get('geopos_locations')->row();
+            if ($loc_info && !empty($loc_info->ware)) {
+                $warehouse = (int)$loc_info->ware;
+            }
+        }
+
         $product_code = $this->input->post('product_code');
         $product_price = numberClean($this->input->post('product_price'));
         $factoryprice = numberClean($this->input->post('fproduct_price'));
@@ -229,6 +239,16 @@ class Products extends CI_Controller
         $product_name = $this->input->post('product_name', true);
         $catid = $this->input->post('product_cat');
         $warehouse = $this->input->post('product_warehouse');
+        
+        // Multi-Tenant Isolation: Si el usuario pertenece a un local específico, forzar su almacén exclusivo
+        $user_loc = (int)$this->aauth->get_user()->loc;
+        if ($user_loc > 0) {
+            $loc_info = $this->db->where('id', $user_loc)->get('geopos_locations')->row();
+            if ($loc_info && !empty($loc_info->ware)) {
+                $warehouse = (int)$loc_info->ware;
+            }
+        }
+
         $product_code = $this->input->post('product_code');
         $product_price = numberClean($this->input->post('product_price'));
         $factoryprice = numberClean($this->input->post('fproduct_price'));

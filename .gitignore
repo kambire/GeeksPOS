@@ -36,3 +36,11 @@ application/config/lic.php
 
 # Secretos del entorno (usar .env.example como plantilla)
 .env
+
+# Builds de la app de repartidores: se publican como asset en GitHub Releases, no en el repo (limite 100 MB)
+*.apk
+*.aab
+
+# Logs de depuracion (pueden contener PINs/tokens) y datos de prueba locales
+*.log
+seed_*.sql

@@ -584,6 +584,7 @@
     </div>
 </div>
 <?php $this->load->view('pos/payment_modal',['acc_list'=>$acc_list]); ?>
+<?php $this->load->view('pos/whatsapp_drawer'); ?>
 <div class="modal fade" id="register" role="dialog">
     <div class="modal-dialog">
         <div class="modal-content ">
@@ -820,13 +821,17 @@
     // Mostrar notificación toast estilizada y no invasiva (en la esquina superior)
     function mostrarToastVenta(data) {
         $('#pos_sale_toast').remove();
+        try {
+            window.dispatchEvent(new CustomEvent('pos_sale_completed', { detail: data }));
+        } catch(e) {}
         var sifenInfo = data.sifen_numero ? (' • <span class="badge badge-success" style="font-size:11px;">Factura SIFEN ' + data.sifen_numero + '</span>') : '';
         var toastHtml = '<div id="pos_sale_toast" style="position:fixed;top:20px;right:20px;z-index:99999;background:#065f46;color:#fff;padding:12px 18px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-size:14px;display:flex;align-items:center;gap:12px;border-left:5px solid #10b981;">' +
             '<i class="fa fa-check-circle" style="font-size:22px;color:#34d399;"></i>' +
             '<div>' +
                 '<div style="font-weight:700;">¡Venta Cobrada con Éxito! Ticket #' + (data.tid || data.invoice_id) + sifenInfo + '</div>' +
-                '<div style="font-size:12px;opacity:0.9;"><i class="fa fa-print"></i> Ticket enviado a la impresora térmica... ' +
-                    '<a href="javascript:imprimirTicketIframe(\'' + data.ticket_url + '\')" style="color:#6ee7b7;text-decoration:underline;margin-left:8px;font-weight:bold;">Reimprimir</a>' +
+                '<div style="font-size:12px;opacity:0.9;"><i class="fa fa-print"></i> Ticket impreso... ' +
+                    '<a href="javascript:imprimirTicketIframe(\'' + data.ticket_url + '\')" style="color:#6ee7b7;text-decoration:underline;margin-left:6px;font-weight:bold;">Reimprimir</a>' +
+                    '<a href="javascript:toggleWhatsAppDrawer(true)" style="background:#25d366;color:#fff;padding:2px 8px;border-radius:4px;margin-left:8px;font-weight:bold;text-decoration:none;"><i class="fa fa-whatsapp"></i> WhatsApp</a>' +
                 '</div>' +
             '</div>' +
             '<button type="button" onclick="$(\'#pos_sale_toast\').fadeOut()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;margin-left:8px;">&times;</button>' +
@@ -834,7 +839,7 @@
         $('body').append(toastHtml);
         setTimeout(function() {
             $('#pos_sale_toast').fadeOut(function() { $(this).remove(); });
-        }, 5000);
+        }, 6000);
     }
 
     // Limpiar el carrito del POS inmediatamente tras el cobro exitoso
