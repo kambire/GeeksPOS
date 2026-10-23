@@ -3,6 +3,15 @@ RewriteEngine On
 # Bloquear acceso web al repositorio git y a los respaldos .bak
 RewriteRule (^|/)\.git(/|$) - [F,L]
 RewriteRule \.bak$ - [F,L]
+# Archivos de entorno con secretos (.env, .env.*) y logs de depuracion
+RewriteRule (^|/)\.env - [F,L]
+RewriteRule \.log$ - [F,L]
+# Volcados SQL, migraciones y scripts de instalacion: nunca accesibles por web
+RewriteRule \.sql$ - [F,L]
+RewriteRule ^db_migrations/ - [F,L]
+RewriteRule ^(install\.sh|_p12_legacy_test\.php)$ - [F,L]
+# Certificados digitales de SIFEN (.p12 con clave privada): nunca accesibles por web
+RewriteRule ^userfiles/sifen/certs/ - [F,L]
 
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

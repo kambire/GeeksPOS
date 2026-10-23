@@ -80,3 +80,7 @@ $route['api/ticket/(:num)'] = 'api/ticket/$1';
 // Rutas Facturación Electrónica SIFEN Paraguay
 $route['sifen_config'] = 'sifen_config';
 $route['sifen_config/(:any)'] = 'sifen_config/$1';
+
+// Rutas de Seguimiento GPS en Vivo para Clientes
+$route['tracking/live/(:any)'] = 'tracking/live/$1';
+$route['tracking/(:any)'] = 'tracking/index/$1';

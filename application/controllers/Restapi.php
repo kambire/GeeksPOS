@@ -49,9 +49,10 @@ class Restapi extends CI_Controller
 
     public function delete_i()
     {
-        $id = $this->input->post('deleteid');
+        $id = (int)$this->input->post('deleteid');
         if ($id) {
-            $this->db->delete('geopos_restkeys', array('id' => $id));
+            // Se revoca (queda registro) en lugar de borrar
+            $this->db->where('id', $id)->update('geopos_restkeys', array('revoked_at' => date('Y-m-d H:i:s'), 'key' => null));
             echo json_encode(array('status' => 'Success', 'message' => $this->lang->line('API Key deleted')));
         } else {
             echo json_encode(array('status' => 'Error', 'message' => $this->lang->line('ERROR')));
@@ -62,9 +63,10 @@ class Restapi extends CI_Controller
     {
 
 
-        if ($this->restapi->addnew()) {
+        if ($new_key = $this->restapi->addnew()) {
 
             $data['message'] = true;
+            $data['new_key'] = $new_key;
 
 
             $data['keys'] = $this->restapi->keylist();
@@ -76,5 +78,19 @@ class Restapi extends CI_Controller
         }
 
 
+    }
+
+    public function n8n()
+    {
+        $user = $this->aauth->get_user();
+        if ($user->loc > 0 && $user->id != 11) {
+            redirect('delivery_config', 'refresh');
+        }
+        $head['usernm'] = $user->username;
+        $head['title'] = 'Flujo de Integración GeeksIA & WhatsApp';
+        $data['keys'] = $this->restapi->keylist();
+        $this->load->view('fixed/header', $head);
+        $this->load->view('restapi/n8n_flow', $data);
+        $this->load->view('fixed/footer');
     }
 }

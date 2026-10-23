@@ -18,3 +18,11 @@ $hook['pre_controller'] = array(
     'filepath' => 'hooks'
 );
 
+// Seguridad global: CSRF por origen y módulos solo para el administrador de plataforma
+$hook['post_controller_constructor'] = array(
+    'class' => 'Security_guard',
+    'function' => 'check',
+    'filename' => 'Security_guard.php',
+    'filepath' => 'hooks'
+);
+

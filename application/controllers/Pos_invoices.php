@@ -53,15 +53,20 @@ class Pos_invoices extends CI_Controller
         $validtoken = $tid ? hash_hmac('ripemd160', $tid, $this->config->item('encryption_key')) : '';
         $is_valid_token = ($token && hash_equals($validtoken, $token));
 
+        // Acceso sin sesión con API key: solo keys de plataforma vigentes (las de un local no ven tickets de otros)
         $is_valid_api = false;
-        $api_key = $this->input->get('key') ?: $this->input->get('api_key') ?: $this->input->server('HTTP_X_API_KEY');
-        if ($api_key) {
-            $key_row = $this->db->where('key', $api_key)->get('geopos_restkeys')->row();
+        $api_key = $this->input->server('HTTP_X_API_KEY') ?: ($this->input->get('key') ?: $this->input->get('api_key'));
+        if ($api_key && is_string($api_key)) {
+            $key_row = $this->db->where('key_hash', hash('sha256', $api_key))
+                                ->where('scope', 'platform')
+                                ->where('revoked_at IS NULL', null, false)
+                                ->get('geopos_restkeys')->row();
             if ($key_row) {
                 $is_valid_api = true;
             }
         }
 
+        // El QR y el estado de WhatsApp requieren sesión (ya no se exponen por API key)
         if (in_array($method, ['ticket', 'thermal_pdf', 'download_dte']) && ($is_valid_token || $is_valid_api)) {
             $this->limited = '';
             $this->load->library("Custom");
@@ -1878,6 +1883,10 @@ echo 6;
 
                 $this->db->select('key');
                 $this->db->from('geopos_restkeys');
+                // Solo keys legacy de plataforma vigentes (las de cada local ya no se guardan en claro)
+                $this->db->where('scope', 'platform');
+                $this->db->where('revoked_at IS NULL', null, false);
+                $this->db->where('key IS NOT NULL', null, false);
                 $this->db->limit(1);
                 $query_r = $this->db->get();
 
@@ -2117,7 +2126,8 @@ echo 6;
         $this->db->select('key');
         $this->db->from('geopos_restkeys');
         $this->db->limit(1);
-        $this->db->where('key', $key);
+        $this->db->where('key', (string)$key);
+        $this->db->where('revoked_at IS NULL', null, false);
         $query_r = $this->db->get();
         if ($query_r->num_rows() > 0) {
             $run = true;
@@ -2299,6 +2309,173 @@ echo 6;
         unlink(FCPATH . 'userfiles' . DIRECTORY_SEPARATOR . 'pos_temp' . DIRECTORY_SEPARATOR . $file_id . '.png');
         unlink(FCPATH . 'userfiles' . DIRECTORY_SEPARATOR . 'pos_temp' . DIRECTORY_SEPARATOR . $file_id . '.pdf');
 
+    }
+
+    /**
+     * AJAX (con sesión): pedidos pendientes del bot de WhatsApp para el drawer del POS.
+     * Siempre limitado al local del usuario; reemplaza el uso de la API key maestra en el navegador.
+     */
+    public function wa_orders()
+    {
+        $this->load->model('api_model');
+        $this->api_model->scope_loc = (int)$this->aauth->get_user()->loc;
+        $orders = $this->api_model->get_orders('due', null, null, 10, 0);
+        echo json_encode(['status' => true, 'count' => count($orders), 'orders' => $orders]);
+    }
+
+    /**
+     * AJAX (con sesión): el cajero acepta un pedido de WhatsApp de su propio local
+     */
+    public function wa_order_accept()
+    {
+        $id = (int)$this->input->post('id');
+        if ($id <= 0) {
+            echo json_encode(['status' => false, 'message' => 'Pedido inválido']);
+            return;
+        }
+        $this->load->model('api_model');
+        $this->api_model->scope_loc = (int)$this->aauth->get_user()->loc;
+        $result = $this->api_model->update_order_status($id, 'paid', 'Aceptado por cajero en POS');
+        if (!empty($result['status'])) {
+            $this->api_model->dispatch_webhook($id, 'paid', 'Aceptado por cajero en POS');
+        }
+        echo json_encode($result);
+    }
+
+    /**
+     * AJAX endpoint: Get WhatsApp QR Code or Connection State from Evolution API
+     */
+    public function get_whatsapp_qr()
+    {
+        $this->config->load('geeksia', true, true);
+        $evo_url = $this->config->item('evolution_api_url', 'geeksia');
+        $headers = [
+            'apikey: ' . $this->config->item('evolution_api_key', 'geeksia'),
+            'Content-Type: application/json'
+        ];
+
+        // Cada local ve solo SU instancia. Solo el administrador de plataforma (loc 0) puede elegir otra.
+        $user = $this->aauth->get_user();
+        $user_loc = (int)$user->loc;
+        if ($user_loc > 0) {
+            $loc_row = $this->db->select('whatsapp_instance')->where('id', $user_loc)->get('geopos_locations')->row();
+            $instance = $loc_row ? trim((string)$loc_row->whatsapp_instance) : '';
+        } else {
+            $instance = 'pos_whatsapp';
+            $req = trim((string)$this->input->get('instance', true));
+            if ($req !== '' && (int)$user->roleid === 5
+                && $this->db->where('whatsapp_instance', $req)->count_all_results('geopos_locations') > 0) {
+                $instance = $req;
+            }
+        }
+        if ($instance === '' || !preg_match('/^[A-Za-z0-9_.-]{1,100}$/', $instance)) {
+            echo json_encode(['status' => false, 'state' => 'close', 'message' => 'Este local no tiene una instancia de WhatsApp asignada']);
+            return;
+        }
+        // Escanear el QR vincula el número del local: solo gerentes y administradores (roleid >= 4)
+        $can_link = (int)$user->roleid >= 4;
+        $inst = rawurlencode($instance);
+
+        // 1. Check connection state
+        $ch = curl_init($evo_url . '/instance/connectionState/' . $inst);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 4);
+        $res = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $state_data = json_decode($res, true);
+        $state = $state_data['instance']['state'] ?? 'close';
+
+        if (!$can_link && $state !== 'open') {
+            echo json_encode(['status' => true, 'state' => $state, 'qrcode' => null, 'message' => 'WhatsApp desconectado: pedí al encargado que lo vuelva a vincular']);
+            return;
+        }
+
+        // If instance not found (404) or empty, create it
+        if ($http_code == 404 || empty($state_data['instance'])) {
+            $ch = curl_init($evo_url . '/instance/create');
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+                'instanceName' => $instance,
+                'qrcode' => true,
+                'integration' => 'WHATSAPP-BAILEYS'
+            ]));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+            $create_res = curl_exec($ch);
+            curl_close($ch);
+
+            $create_data = json_decode($create_res, true);
+            $qr_base64 = $create_data['qrcode']['base64'] ?? null;
+            echo json_encode([
+                'status' => true,
+                'state' => 'connecting',
+                'qrcode' => $qr_base64
+            ]);
+            return;
+        }
+
+        // If state is already open (connected)
+        if ($state === 'open') {
+            echo json_encode([
+                'status' => true,
+                'state' => 'open',
+                'message' => 'WhatsApp Conectado y Activo'
+            ]);
+            return;
+        }
+
+        // Otherwise fetch current QR code
+        $ch = curl_init($evo_url . '/instance/connect/' . $inst);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        $qr_res = curl_exec($ch);
+        curl_close($ch);
+
+        $qr_data = json_decode($qr_res, true);
+        $qr_base64 = $qr_data['base64'] ?? null;
+
+        echo json_encode([
+            'status' => true,
+            'state' => $state,
+            'qrcode' => $qr_base64
+        ]);
+    }
+
+    /**
+     * AJAX endpoint: Get health status of n8n, Evolution API, and GeeksPOS
+     */
+    public function get_services_status()
+    {
+        // Check n8n
+        $this->config->load('geeksia', true, true);
+        $n8n_ok = false;
+        $ch = curl_init(preg_replace('#/api/v1/?$#', '/', $this->config->item('n8n_api_url', 'geeksia')));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+        curl_exec($ch);
+        if (curl_getinfo($ch, CURLINFO_HTTP_CODE) == 200) $n8n_ok = true;
+        curl_close($ch);
+
+        // Check Evolution
+        $evo_ok = false;
+        $ch = curl_init($this->config->item('evolution_api_url', 'geeksia') . '/');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+        curl_exec($ch);
+        if (curl_getinfo($ch, CURLINFO_HTTP_CODE) == 200) $evo_ok = true;
+        curl_close($ch);
+
+        echo json_encode([
+            'status' => true,
+            'n8n' => $n8n_ok,
+            'evolution' => $evo_ok,
+            'pos_api' => true
+        ]);
     }
 
 }

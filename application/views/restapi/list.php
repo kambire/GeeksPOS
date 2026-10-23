@@ -4,7 +4,7 @@
         echo '<div id = "notify" class="alert alert-success"  >
             <a href = "#" class="close" data - dismiss = "alert" >&times;</a >
 
-            <div class="message" >Api key added successfully!</div >
+            <div class="message" >Api key added successfully! Copiala ahora: no se vuelve a mostrar.<br><code style="user-select:all;">' . htmlspecialchars($new_key ?? '', ENT_QUOTES) . '</code></div >
         </div >';
     } ?>
     <div class="card-body">

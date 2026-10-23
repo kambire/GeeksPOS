@@ -7,6 +7,11 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 class Api_model extends CI_Model
 {
+    /**
+     * Local al que está limitada la petición (key de local). null = key de plataforma, sin filtro.
+     */
+    public $scope_loc = null;
+
     public function __construct()
     {
         parent::__construct();
@@ -29,25 +34,65 @@ class Api_model extends CI_Model
     }
 
     /**
-     * List products with search, category filter, and pagination
+     * Helper to format product data with absolute image URLs, promos, and currency
      */
-    public function get_products($id = null, $search = null, $category_id = null, $code = null, $limit = 50, $offset = 0)
+    public function format_product($p)
     {
-        $this->db->select('p.pid AS id, p.product_name AS name, p.product_code AS code, p.product_price AS price, p.fproduct_price, p.qty AS stock, p.unit, p.alert, p.image, p.pcat AS category_id, c.title AS category_name, p.product_des AS description');
+        if (empty($p)) return $p;
+        $base = $this->get_base_url();
+        $img = (!empty($p['image']) && $p['image'] !== 'default.png') ? $p['image'] : 'demo.png';
+
+        $p['image_url'] = $base . 'userfiles/product/' . $img;
+        $p['image_thumb'] = $base . 'userfiles/product/thumbnail/' . $img;
+
+        $price = (float)($p['price'] ?? 0);
+        $fprice = (float)($p['fproduct_price'] ?? 0);
+        $disrate = (float)($p['disrate'] ?? 0);
+
+        $has_promo = false;
+        $promo_price = $price;
+
+        if ($disrate > 0) {
+            $has_promo = true;
+            $promo_price = round($price * (1 - ($disrate / 100)), 2);
+        } elseif ($fprice > 0 && $fprice < $price) {
+            $has_promo = true;
+            $promo_price = $fprice;
+        }
+
+        $p['has_promo'] = $has_promo;
+        $p['promo_price'] = $promo_price;
+        $p['currency'] = 'Gs.';
+        return $p;
+    }
+
+    /**
+     * List products with search, category filter, warehouse/tenant filter, and pagination
+     */
+    public function get_products($id = null, $search = null, $category_id = null, $code = null, $limit = 50, $offset = 0, $warehouse_id = null)
+    {
+        $this->db->select('p.pid AS id, p.product_name AS name, p.product_code AS code, p.product_price AS price, p.fproduct_price, p.disrate, p.qty AS stock, p.unit, p.alert, p.image, p.pcat AS category_id, c.title AS category_name, p.product_des AS description, p.warehouse AS warehouse_id');
         $this->db->from('geopos_products p');
         $this->db->join('geopos_product_cat c', 'c.id = p.pcat', 'left');
+
+        // El filtro de almacén va primero: también aplica a búsquedas por ID o código
+        if (!empty($warehouse_id)) {
+            $this->db->where('p.warehouse', (int)$warehouse_id);
+        }
 
         if ($id !== null && $id !== '') {
             $this->db->where('p.pid', (int)$id);
             $query = $this->db->get();
-            return $query->row_array();
+            return $this->format_product($query->row_array());
         }
 
         if ($code !== null && $code !== '') {
+            $this->db->group_start();
             $this->db->where('p.product_code', $code);
             $this->db->or_where('p.barcode', $code);
+            $this->db->group_end();
             $query = $this->db->get();
-            return $query->row_array();
+            return $this->format_product($query->row_array());
         }
 
         if (!empty($category_id)) {
@@ -65,7 +110,110 @@ class Api_model extends CI_Model
         $this->db->order_by('p.product_name', 'ASC');
         $this->db->limit((int)$limit, (int)$offset);
         $query = $this->db->get();
-        return $query->result_array();
+        $rows = $query->result_array();
+        foreach ($rows as &$r) {
+            $r = $this->format_product($r);
+        }
+        return $rows;
+    }
+
+    /**
+     * Get Complete Menu structured by categories (designed for WhatsApp Bots & AI Agents)
+     */
+    public function get_menu($warehouse_id = null)
+    {
+        $this->db->select('id, title, extra AS description');
+        $this->db->from('geopos_product_cat');
+        $this->db->order_by('id', 'ASC');
+        $cats = $this->db->get()->result_array();
+
+        $menu = [];
+        foreach ($cats as $cat) {
+            $this->db->select('p.pid AS id, p.product_name AS name, p.product_code AS code, p.product_price AS price, p.fproduct_price, p.disrate, p.qty AS stock, p.unit, p.alert, p.image, p.pcat AS category_id, p.product_des AS description, p.warehouse AS warehouse_id');
+            $this->db->from('geopos_products p');
+            $this->db->where('p.pcat', $cat['id']);
+            if (!empty($warehouse_id)) {
+                $this->db->where('p.warehouse', (int)$warehouse_id);
+            }
+            $this->db->order_by('p.product_name', 'ASC');
+            $products = $this->db->get()->result_array();
+
+            if (!empty($products)) {
+                foreach ($products as &$pr) {
+                    $pr = $this->format_product($pr);
+                }
+                $menu[] = [
+                    'category_id' => $cat['id'],
+                    'category_name' => $cat['title'],
+                    'category_description' => $cat['description'] ?? '',
+                    'items_count' => count($products),
+                    'items' => $products
+                ];
+            }
+        }
+        return $menu;
+    }
+
+    /**
+     * Get Active Promotions & Coupons
+     */
+    public function get_promotions($location_id = null)
+    {
+        $this->db->select('id, code, amount, valid AS valid_until, active, note, available, location AS location_id');
+        $this->db->from('geopos_promo');
+        $this->db->where('active', 1);
+        $this->db->where('valid >=', date('Y-m-d'));
+        if (!empty($location_id)) {
+            $this->db->group_start();
+            $this->db->where('location', (int)$location_id);
+            $this->db->or_where('location', 0);
+            $this->db->group_end();
+        }
+        $this->db->order_by('valid', 'ASC');
+        return $this->db->get()->result_array();
+    }
+
+    /**
+     * Get Tenant / Business by WhatsApp instance name or Location ID
+     * Essential for Multi-Tenant n8n Dynamic Routing
+     */
+    public function get_tenant($instance = null, $id = null)
+    {
+        $this->db->select('id AS location_id, cname AS name, phone, email, taxid, address, city, ware AS warehouse_id, whatsapp_instance, api_key');
+        $this->db->from('geopos_locations');
+
+        if (!empty($instance)) {
+            $this->db->where('whatsapp_instance', $instance);
+        } elseif (!empty($id)) {
+            $this->db->where('id', (int)$id);
+        } else {
+            return null;
+        }
+
+        $row = $this->db->get()->row_array();
+        if ($row) {
+            $row['base_url'] = $this->get_base_url();
+            return $row;
+        }
+
+        // Fallback to location 0 (main company)
+        if ($instance === 'pos_whatsapp' || $id === '0' || $id === 0) {
+            $comp = $this->db->select('id, cname AS name, phone, email, taxid, address, city')->get('geopos_system')->row_array();
+            return [
+                'location_id' => 0,
+                'name' => $comp['cname'] ?? 'GeeksPOS Main',
+                'phone' => $comp['phone'] ?? '',
+                'email' => $comp['email'] ?? '',
+                'taxid' => $comp['taxid'] ?? '',
+                'address' => $comp['address'] ?? '',
+                'city' => $comp['city'] ?? '',
+                'warehouse_id' => 1,
+                'whatsapp_instance' => 'pos_whatsapp',
+                'base_url' => $this->get_base_url()
+            ];
+        }
+
+        return null;
     }
 
     /**
@@ -75,6 +223,9 @@ class Api_model extends CI_Model
     {
         $this->db->select('id, name, phone, email, address, city, region, country, taxid, company, balance, reg_date');
         $this->db->from('geopos_customers');
+        if ($this->scope_loc !== null) {
+            $this->db->where('loc', (int)$this->scope_loc);
+        }
 
         if ($id !== null && $id !== '') {
             $this->db->where('id', (int)$id);
@@ -146,6 +297,10 @@ class Api_model extends CI_Model
         ];
 
         if ($id > 0) {
+            // Con key de local solo se pueden editar clientes de ese local
+            if ($this->scope_loc !== null && !$this->get_customers($id)) {
+                return 0;
+            }
             $this->db->where('id', $id);
             $this->db->update('geopos_customers', $customer_data);
             return $id;
@@ -153,7 +308,7 @@ class Api_model extends CI_Model
             $customer_data['gid'] = 1;
             $customer_data['picture'] = 'example.png';
             $customer_data['balance'] = 0.00;
-            $customer_data['loc'] = 0;
+            $customer_data['loc'] = $this->scope_loc !== null ? (int)$this->scope_loc : 0;
             $customer_data['reg_date'] = date('Y-m-d H:i:s');
             $this->db->insert('geopos_customers', $customer_data);
             return $this->db->insert_id();
@@ -214,6 +369,15 @@ class Api_model extends CI_Model
         $card_txn = isset($payload['card_txn']) ? trim($payload['card_txn']) : '';
         $employee_id = isset($payload['employee_id']) ? (int)$payload['employee_id'] : ($defaults['employee_id'] ?? 11);
         $loc_id = isset($payload['location_id']) ? (int)$payload['location_id'] : ($defaults['location_id'] ?? 0);
+        
+        // Multi-Tenant: Si se envía el slug de la instancia (ej: 'geeks', 'pepito_burger'), resolver el local exacto
+        if (empty($loc_id) && !empty($payload['instance'])) {
+            $t = $this->get_tenant($payload['instance']);
+            if ($t && !empty($t['location_id'])) {
+                $loc_id = (int)$t['location_id'];
+            }
+        }
+
         $system_tag = !empty($system) ? substr($system, 0, 20) : 'api';
 
         // 3. Sequential Invoice Number (tid)
@@ -330,9 +494,13 @@ class Api_model extends CI_Model
         $this->db->insert('geopos_invoices', $invoice_data);
         $invoice_id = $this->db->insert_id();
 
-        // 6. Insert Batch Items with generated invoice_id as tid
+        // 6. Insert Batch Items with generated invoice_id as tid and deduct stock
         foreach ($batch_items as &$item_row) {
             $item_row['tid'] = $invoice_id;
+            // Descontar inventario del producto en el almacén de este local
+            $this->db->set('qty', 'qty - ' . (float)$item_row['qty'], false);
+            $this->db->where('pid', (int)$item_row['pid']);
+            $this->db->update('geopos_products');
         }
         $this->db->insert_batch('geopos_invoice_items', $batch_items);
 
@@ -415,6 +583,9 @@ class Api_model extends CI_Model
         $this->db->from('geopos_invoices i');
         $this->db->join('geopos_customers c', 'c.id = i.csd', 'left');
         $this->db->where('i.id', (int)$id);
+        if ($this->scope_loc !== null) {
+            $this->db->where('i.loc', (int)$this->scope_loc);
+        }
         $order = $this->db->get()->row_array();
 
         if (!$order) {
@@ -443,6 +614,9 @@ class Api_model extends CI_Model
         $this->db->from('geopos_invoices i');
         $this->db->join('geopos_customers c', 'c.id = i.csd', 'left');
         $this->db->where('i.i_class', 1);
+        if ($this->scope_loc !== null) {
+            $this->db->where('i.loc', (int)$this->scope_loc);
+        }
 
         if (!empty($status)) {
             $this->db->where('i.status', strtolower($status));
@@ -487,7 +661,13 @@ class Api_model extends CI_Model
         }
 
         $this->db->where('id', $id);
+        if ($this->scope_loc !== null) {
+            $this->db->where('loc', (int)$this->scope_loc);
+        }
         $this->db->update('geopos_invoices', $data);
+        if ($this->db->affected_rows() === 0 && !$this->get_order_details($id)) {
+            return ['status' => false, 'message' => 'Order not found'];
+        }
 
         return ['status' => true, 'message' => 'Status updated successfully', 'id' => $id, 'status_updated' => $status];
     }
