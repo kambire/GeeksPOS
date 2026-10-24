@@ -862,13 +862,12 @@ class Delivery_model extends CI_Model
         // Ensure slots exist
         $this->get_deliveries($loc_id);
 
-        // Query candidate
+        // Query candidate: Repartidor activo y disponible para este local
         $this->db->select('*');
         $this->db->from('geopos_deliveries');
         $this->db->where('loc_id', $loc_id);
         $this->db->where('activo', 1);
         $this->db->where('ocupado', 0);
-        $this->db->where("telefono != '' AND telefono IS NOT NULL");
 
         // Order criteria:
         // 1. pedidos_hoy ASC
@@ -912,7 +911,16 @@ class Delivery_model extends CI_Model
 
             $slot_val = (int)$chosen['slot'];
             $driver_name = $chosen['nombre'];
-            $driver_phone = $chosen['telefono'];
+            $driver_phone = !empty($chosen['telefono']) ? $chosen['telefono'] : '';
+
+            // Si el slot no tiene teléfono configurado, intentar recuperarlo de geopos_employees o geopos_users
+            if (empty($driver_phone) && !empty($chosen['email'])) {
+                $emp = $this->db->where('email', $chosen['email'])->get('geopos_employees')->row_array();
+                if (!empty($emp['phone'])) {
+                    $driver_phone = $emp['phone'];
+                    $this->db->where('id', $chosen['id'])->update('geopos_deliveries', ['telefono' => $driver_phone]);
+                }
+            }
         }
 
         // Generar hash de tracking en vivo y registrar en geopos_delivery_orders

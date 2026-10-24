@@ -161,11 +161,18 @@ class Kitchen_model extends CI_Model
         $this->db->where('id', $id);
         $res = $this->db->update($this->table, $data);
 
-        // If this order is linked to a delivery order, notify/sync delivery state if ready
-        if ($res && !empty($order['delivery_order_id']) && $new_status == 'listo') {
-            $this->db->where('id', $order['delivery_order_id']);
-            $this->db->where('estado', 'asignado');
-            $this->db->update('geopos_delivery_orders', array('estado' => 'en_camino', 'picked_at' => $now));
+        // If this order is linked to a delivery order, notify/sync delivery state if ready or dispatched
+        if ($res && !empty($order['delivery_order_id'])) {
+            if ($new_status == 'listo') {
+                $this->db->where('id', $order['delivery_order_id']);
+                $this->db->where('estado', 'asignado');
+                $this->db->update('geopos_delivery_orders', array('estado' => 'en_camino', 'picked_at' => $now));
+            } elseif ($new_status == 'entregado') {
+                // Si cocina marca entregado en KDS, para delivery significa que cocina ya lo despachó
+                $this->db->where('id', $order['delivery_order_id']);
+                $this->db->where_in('estado', array('asignado', 'pendiente'));
+                $this->db->update('geopos_delivery_orders', array('estado' => 'en_camino', 'picked_at' => $now));
+            }
         }
 
         return $res;

@@ -497,7 +497,8 @@ class P extends CI_Controller
         $system_prompt .= "2. Si compartió su ubicación GPS o dirección, validá la distancia y decile el costo de delivery.\n";
         $system_prompt .= "3. Para cerrar un pedido necesitás: Detalle de platos, Dirección/Ubicación de entrega, Nombre del cliente, Teléfono, y Forma de pago.\n";
         $system_prompt .= "4. Si el cliente tiene dudas o prefiere hablar por WhatsApp, recordale que puede tocar el botón verde superior 'WhatsApp' en cualquier momento.\n";
-        $system_prompt .= "5. Respondé de forma concisa, clara y directa en español rioplatense/paraguayo.";
+        $system_prompt .= "5. Respondé de forma concisa, clara y directa en español rioplatense/paraguayo.\n";
+        $system_prompt .= "6. REGLA DE HAMBURGUESAS Y DESMECHADOS SIN PAPAS: Todas las hamburguesas y desmechados vienen por defecto en COMBO con papas fritas incluidas. Si el cliente pide su hamburguesa o desmechado 'SOLA', 'SIN PAPAS' o 'SIN COMBO', tiene un descuento de 5.000 Gs (Cheese Sola: 30.000 Gs, Bronx Sola: 30.000 Gs, New York Sola: 30.000 Gs, Strike Sola: 45.000 Gs, Menu Kids Sola: 30.000 Gs, Desmechados Solos: 40.000 Gs).";
 
         if (empty($api_key)) {
             return $this->smart_rule_fallback($user_message, $store_name, $menu, $delivery_calc, $config);
