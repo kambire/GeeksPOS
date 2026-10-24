@@ -32,19 +32,23 @@ class P extends CI_Controller
 
         if ($slug !== '') {
             if (is_numeric($slug)) {
-                $location = $this->db->where('id', (int)$slug)->get('geopos_locations')->row_array();
+                $q = $this->db->where('id', (int)$slug)->get('geopos_locations');
+                $location = ($q && is_object($q)) ? $q->row_array() : null;
             } else {
                 $this->db->like('cname', $slug);
-                $location = $this->db->get('geopos_locations')->row_array();
+                $q = $this->db->get('geopos_locations');
+                $location = ($q && is_object($q)) ? $q->row_array() : null;
             }
         }
 
         if (!$location) {
-            $location = $this->db->order_by('id', 'ASC')->get('geopos_locations')->row_array();
+            $q = $this->db->order_by('id', 'ASC')->get('geopos_locations');
+            $location = ($q && is_object($q)) ? $q->row_array() : null;
         }
 
         if (!$location) {
-            $sys = $this->db->get('geopos_system')->row_array();
+            $q = $this->db->get('geopos_system');
+            $sys = ($q && is_object($q)) ? $q->row_array() : [];
             $location = [
                 'id'       => 0,
                 'cname'    => $sys['cname'] ?? 'GeeksPOS Delivery',
@@ -66,48 +70,70 @@ class P extends CI_Controller
         $loc_id = (int)$loc_id;
         $ware_ids = [];
 
+        // 1. Resolver todos los IDs de almacén ($ware_ids) usando consultas aisladas
+        //    ANTES de inicializar o tocar la consulta de productos para evitar colisiones en CI3 Query Builder.
         if ($loc_id > 0) {
             // Obtener el almacén asignado a este local
-            $loc_row = $this->db->select('ware')->where('id', $loc_id)->get('geopos_locations')->row_array();
+            $loc_query = $this->db->select('ware')->where('id', $loc_id)->get('geopos_locations');
+            $loc_row   = ($loc_query && is_object($loc_query)) ? $loc_query->row_array() : null;
             if (!empty($loc_row['ware'])) {
                 $ware_ids[] = (int)$loc_row['ware'];
             }
-            // También almacenes con loc = $loc_id
-            $extra = $this->db->select('id')->where('loc', $loc_id)->get('geopos_warehouse')->result_array();
+
+            // También almacenes vinculados directamente con loc = $loc_id
+            $extra_query = $this->db->select('id')->where('loc', $loc_id)->get('geopos_warehouse');
+            $extra = ($extra_query && is_object($extra_query)) ? $extra_query->result_array() : [];
             if (is_array($extra)) {
                 foreach ($extra as $ew) {
-                    $ware_ids[] = (int)$ew['id'];
+                    if (!empty($ew['id'])) {
+                        $ware_ids[] = (int)$ew['id'];
+                    }
                 }
             }
-            $ware_ids = array_unique(array_filter($ware_ids));
+            $ware_ids = array_values(array_unique(array_filter($ware_ids)));
         } else {
             // Sede Matriz (loc 0): almacenes principales de la matriz
-            $matriz_wares = $this->db->select('id')->where('loc', 0)->get('geopos_warehouse')->result_array();
-            if (is_array($matriz_wares)) {
-                $ware_ids = array_column($matriz_wares, 'id');
+            $matriz_query = $this->db->select('id')->where('loc', 0)->get('geopos_warehouse');
+            $matriz_wares = ($matriz_query && is_object($matriz_query)) ? $matriz_query->result_array() : [];
+            if (!empty($matriz_wares)) {
+                $ware_ids = array_values(array_unique(array_filter(array_column($matriz_wares, 'id'))));
             }
         }
 
-        // Ahora sí, armar la consulta limpia de productos
+        // 2. Una vez obtenidos los $ware_ids, construir de forma limpia y de una sola vez
+        //    la consulta a geopos_products con su JOIN a geopos_product_cat.
         $this->db->select('p.pid AS id, p.product_name AS name, p.product_price AS price, p.product_des AS description, p.image, c.title AS category');
         $this->db->from('geopos_products p');
         $this->db->join('geopos_product_cat c', 'c.id = p.pcat', 'left');
 
-        if ($loc_id > 0) {
-            if (!empty($ware_ids)) {
-                $this->db->where_in('p.warehouse', $ware_ids);
-            } else {
-                // Si este local aún no tiene almacén creado, no mezclar con productos de otros locales
-                $this->db->where('p.warehouse', -999);
-            }
-        } elseif (!empty($ware_ids)) {
+        if (!empty($ware_ids)) {
             $this->db->where_in('p.warehouse', $ware_ids);
+        } elseif ($loc_id > 0) {
+            // Si el local secundario no tiene almacenes asociados aún, filtrar temporalmente
+            $this->db->where('p.warehouse', -999);
         }
 
         $this->db->order_by('c.title', 'ASC');
         $this->db->order_by('p.product_name', 'ASC');
         $query = $this->db->get();
+
+        // 4. Verificar siempre si $query es un objeto válido antes de llamar a result_array()
         $products = ($query && is_object($query)) ? $query->result_array() : [];
+
+        // 3. Fallback automático para locales secundarios (loc_id > 0):
+        //    Si el local tiene un almacén asignado pero no tiene productos cargados aún,
+        //    o si aún no tiene almacén, consultar los productos del almacén matriz (warehouse = 1)
+        //    para que el catálogo nunca quede vacío.
+        if ($loc_id > 0 && empty($products)) {
+            $this->db->select('p.pid AS id, p.product_name AS name, p.product_price AS price, p.product_des AS description, p.image, c.title AS category');
+            $this->db->from('geopos_products p');
+            $this->db->join('geopos_product_cat c', 'c.id = p.pcat', 'left');
+            $this->db->where('p.warehouse', 1);
+            $this->db->order_by('c.title', 'ASC');
+            $this->db->order_by('p.product_name', 'ASC');
+            $fb_query = $this->db->get();
+            $products = ($fb_query && is_object($fb_query)) ? $fb_query->result_array() : [];
+        }
 
         $menu = [];
         foreach ($products as $p) {
