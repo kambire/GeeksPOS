@@ -242,6 +242,183 @@ class Saas extends CI_Controller
     }
 
     /**
+     * Editar perfil, datos comerciales y credenciales de acceso de un local
+     */
+    public function edit($loc_id = 0)
+    {
+        $loc_id = (int)$loc_id;
+        $loc = $this->db->where('id', $loc_id)->get('geopos_locations')->row_array();
+        if (!$loc) {
+            $this->session->set_flashdata('error_msg', 'El negocio solicitado no existe.');
+            redirect('saas');
+            return;
+        }
+
+        // Obtener usuario administrador del local (roleid = 5)
+        $admin_user = $this->db->where('loc', $loc_id)->where('roleid', 5)->order_by('id', 'ASC')->get('geopos_users')->row_array();
+        if (!$admin_user) {
+            // Fallback: cualquier usuario asignado a este local
+            $admin_user = $this->db->where('loc', $loc_id)->order_by('id', 'ASC')->get('geopos_users')->row_array();
+        }
+
+        // Obtener configuración de WhatsApp / Rubro
+        $wa_config = $this->db->where('loc_id', $loc_id)->get('geopos_whatsapp_config')->row_array();
+
+        if ($this->input->post()) {
+            $cname = trim($this->input->post('cname', true));
+            $taxid = trim($this->input->post('taxid', true));
+            $phone = trim($this->input->post('phone', true));
+            $address = trim($this->input->post('address', true));
+            $city = trim($this->input->post('city', true));
+            $tipo_flujo = trim($this->input->post('tipo_flujo', true)) ?: ($loc['tipo_flujo'] ?? 'restaurante');
+            $whatsapp_instance = trim($this->input->post('whatsapp_instance', true)) ?: ($loc['whatsapp_instance'] ?? '');
+
+            // Datos de usuario administrador
+            $raw_user = trim($this->input->post('username', true));
+            $username = strtolower(preg_replace('/[^a-zA-Z0-9_.-]/', '_', $raw_user));
+            $username = trim(preg_replace('/_+/', '_', $username), '_');
+            $email = trim($this->input->post('email', true));
+            $password = trim($this->input->post('password', true));
+            $banned = (int)$this->input->post('banned');
+
+            if (empty($cname) || empty($username) || empty($email)) {
+                $err = 'El nombre comercial, usuario y correo son obligatorios.';
+                if ($this->input->is_ajax_request()) {
+                    echo json_encode(['status' => 'Error', 'message' => $err]);
+                    return;
+                }
+                $this->session->set_flashdata('error_msg', $err);
+                redirect('saas/edit/' . $loc_id);
+                return;
+            }
+
+            // Validar que el username o email no estén en uso por otro usuario
+            if ($admin_user) {
+                $user_exists = $this->db->where('username', $username)->where('id !=', $admin_user['id'])->get('geopos_users')->row();
+                if ($user_exists) {
+                    $err = "El nombre de usuario '{$username}' ya está en uso por otra cuenta.";
+                    if ($this->input->is_ajax_request()) {
+                        echo json_encode(['status' => 'Error', 'message' => $err]);
+                        return;
+                    }
+                    $this->session->set_flashdata('error_msg', $err);
+                    redirect('saas/edit/' . $loc_id);
+                    return;
+                }
+
+                $email_exists = $this->db->where('email', $email)->where('id !=', $admin_user['id'])->get('geopos_users')->row();
+                if ($email_exists) {
+                    $err = "El correo '{$email}' ya está en uso por otra cuenta.";
+                    if ($this->input->is_ajax_request()) {
+                        echo json_encode(['status' => 'Error', 'message' => $err]);
+                        return;
+                    }
+                    $this->session->set_flashdata('error_msg', $err);
+                    redirect('saas/edit/' . $loc_id);
+                    return;
+                }
+            }
+
+            // 1. Actualizar geopos_locations
+            $loc_update = [
+                'cname'             => $cname,
+                'tipo_flujo'        => $tipo_flujo,
+                'taxid'             => $taxid,
+                'phone'             => $phone,
+                'email'             => $email,
+                'address'           => $address,
+                'city'              => $city,
+                'whatsapp_instance' => $whatsapp_instance
+            ];
+            $this->db->where('id', $loc_id)->update('geopos_locations', $loc_update);
+
+            // 2. Actualizar también el almacén asociado
+            if (!empty($loc['ware'])) {
+                $this->db->where('id', $loc['ware'])->update('geopos_warehouse', [
+                    'title' => 'Almacén - ' . $cname
+                ]);
+            }
+
+            // 3. Actualizar tipo_flujo en geopos_whatsapp_config si cambió
+            if ($tipo_flujo !== ($loc['tipo_flujo'] ?? '')) {
+                $this->load->model('workflow_templates_model');
+                $this->workflow_templates_model->apply_template($loc_id, $tipo_flujo, false);
+            }
+
+            // 4. Actualizar usuario administrador del local
+            if ($admin_user) {
+                $user_update = [
+                    'username' => $username,
+                    'email'    => $email,
+                    'banned'   => $banned
+                ];
+                if (!empty($password)) {
+                    $user_update['pass'] = $this->aauth->hash_password($password, $admin_user['id']);
+                }
+                $this->db->where('id', $admin_user['id'])->update('geopos_users', $user_update);
+
+                // Actualizar ficha empleado
+                $this->db->where('id', $admin_user['id'])->update('geopos_employees', [
+                    'username' => $username,
+                    'name'     => $cname . ' Admin',
+                    'phone'    => $phone,
+                    'address'  => $address,
+                    'city'     => $city
+                ]);
+            } else {
+                // Si el local no tenía usuario aún, crearlo
+                $uid = $this->aauth->create_user($email, $password ?: 'geeks123', $username);
+                if ($uid) {
+                    $this->db->where('id', $uid)->update('geopos_users', [
+                        'roleid' => 5,
+                        'loc'    => $loc_id,
+                        'banned' => $banned
+                    ]);
+                    $this->db->insert('geopos_employees', [
+                        'id'       => $uid,
+                        'username' => $username,
+                        'name'     => $cname . ' Admin',
+                        'address'  => $address,
+                        'city'     => $city,
+                        'phone'    => $phone,
+                        'salary'   => 0
+                    ]);
+                }
+            }
+
+            $success_msg = '¡Perfil del negocio ' . htmlspecialchars($cname) . ' y credenciales actualizados con éxito!';
+            if ($this->input->is_ajax_request()) {
+                echo json_encode([
+                    'status'  => 'Success',
+                    'message' => $success_msg
+                ]);
+                return;
+            }
+
+            $this->session->set_flashdata('success_msg', $success_msg);
+            redirect('saas');
+            return;
+        }
+
+        // Cargar vista de edición
+        $this->load->model('workflow_templates_model');
+        $head['usernm'] = $this->aauth->get_user()->username;
+        $head['title']  = 'Editar Perfil del Negocio: ' . $loc['cname'] . ' | SaaS';
+
+        $data = [
+            'loc'        => $loc,
+            'loc_id'     => $loc_id,
+            'admin_user' => $admin_user,
+            'wa_config'  => $wa_config,
+            'templates'  => $this->workflow_templates_model->get_templates()
+        ];
+
+        $this->load->view('fixed/header', $head);
+        $this->load->view('saas/edit', $data);
+        $this->load->view('fixed/footer');
+    }
+
+    /**
      * Llamada interna a Evolution API para crear la instancia del nuevo negocio
      */
     private function _create_evolution_instance($instance_name)
@@ -653,5 +830,54 @@ class Saas extends CI_Controller
 
         $this->session->set_flashdata('success_msg', $res['message']);
         redirect('saas/workflow/' . $loc_id);
+    }
+
+    /**
+     * Eliminar un local tenant y todos sus registros en cascada
+     */
+    public function delete($loc_id = 0)
+    {
+        $loc_id = (int)$loc_id;
+        if ($loc_id <= 0) {
+            $loc_id = (int)$this->input->post('loc_id');
+        }
+
+        // Solo Super-Administrador (loc = 0 y roleid = 5)
+        if ($this->aauth->get_user()->roleid < 5 || $this->aauth->get_user()->loc != 0) {
+            $resp = ['status' => 'Error', 'message' => 'Acceso denegado: Se requieren permisos de Super-Administrador.'];
+            if ($this->input->is_ajax_request() || $this->input->post()) {
+                echo json_encode($resp);
+                return;
+            }
+            $this->session->set_flashdata('error_msg', $resp['message']);
+            redirect('saas');
+            return;
+        }
+
+        if ($loc_id <= 0) {
+            $resp = ['status' => 'Error', 'message' => 'La Sede Matriz (ID 0) no puede ser eliminada.'];
+            if ($this->input->is_ajax_request() || $this->input->post()) {
+                echo json_encode($resp);
+                return;
+            }
+            $this->session->set_flashdata('error_msg', $resp['message']);
+            redirect('saas');
+            return;
+        }
+
+        $this->load->model('locations_model', 'locations');
+        $res = $this->locations->delete_cascade($loc_id);
+
+        if ($this->input->is_ajax_request() || $this->input->post()) {
+            echo json_encode($res);
+            return;
+        }
+
+        if ($res['status'] === 'Success') {
+            $this->session->set_flashdata('success_msg', $res['message']);
+        } else {
+            $this->session->set_flashdata('error_msg', $res['message']);
+        }
+        redirect('saas');
     }
 }

@@ -1,0 +1,4 @@
+import sqlite3
+
+db_path = '/home/node/.n8n/database.sqlite'
+# We will run this inside geekspos_n8n via node.js or python if available, or copy sqlite, update it, and copy back!

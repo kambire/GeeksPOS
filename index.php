@@ -72,6 +72,7 @@
  */
 //define('ENVIRONMENT', isset($_SERVER['CI_ENV']) ? $_SERVER['CI_ENV'] : 'development');
 define('ENVIRONMENT', 'production');
+date_default_timezone_set('America/Asuncion');
 
 // we don't want to access the main project before installation. redirect to installation page
 if (ENVIRONMENT === 'pre_installation') {

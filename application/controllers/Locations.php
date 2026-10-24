@@ -128,15 +128,12 @@ class Locations extends CI_Controller
 
     public function delete_i()
     {
-        $id = $this->input->post('deleteid');
-        if ($id) {
-
-            $this->db->delete('geopos_locations', array('id' => $id));
-
-
-            echo json_encode(array('status' => 'Success', 'message' => $this->lang->line('DELETED')));
+        $id = (int)$this->input->post('deleteid');
+        if ($id > 0) {
+            $res = $this->locations->delete_cascade($id);
+            echo json_encode($res);
         } else {
-            echo json_encode(array('status' => 'Error', 'message' => $this->lang->line('ERROR')));
+            echo json_encode(array('status' => 'Error', 'message' => 'ID no válido o no se puede eliminar la Sede Matriz.'));
         }
     }
 

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/delivery_order.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
+import '../widgets/order_status.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final DeliveryOrder order;
@@ -79,29 +80,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    Color statusColor;
-    String statusLabel;
-    switch (_order.estado) {
-      case 'asignado':
-        statusColor = const Color(0xFF2563EB);
-        statusLabel = 'ASIGNADO';
-        break;
-      case 'en_camino':
-        statusColor = const Color(0xFFD97706);
-        statusLabel = 'EN CAMINO AL CLIENTE';
-        break;
-      case 'en_puerta':
-        statusColor = const Color(0xFF7C3AED);
-        statusLabel = 'EN LA PUERTA DEL CLIENTE';
-        break;
-      case 'entregado':
-        statusColor = const Color(0xFF10B981);
-        statusLabel = 'ENTREGADO CON ÉXITO';
-        break;
-      default:
-        statusColor = Colors.grey;
-        statusLabel = _order.estado.toUpperCase();
-    }
+    final status = OrderStatusStyle.of(_order.estado);
+    final statusColor = status.color;
+    final statusLabel = status.longLabel;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),

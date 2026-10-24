@@ -1,0 +1,15 @@
+[
+  {
+    "id": "TQE8vIbrpn5QSSJ7",
+    "name": "Postgres Restaurante",
+    "type": "postgres",
+    "data": {
+      "host": "evolution_db",
+      "database": "evolution",
+      "user": "evolution",
+      "password": "EvolutionSecurePass2026!",
+      "port": 5432,
+      "ssl": "disable"
+    }
+  }
+]

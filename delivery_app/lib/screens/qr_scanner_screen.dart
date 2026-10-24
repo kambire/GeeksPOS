@@ -31,26 +31,32 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
   void _processQrData(String rawData) {
     String? serverUrl;
-    String? phone;
-    String? pin;
+    String? identifier;
+    String? password;
 
     // 1. Try parsing JSON format
     try {
       final decoded = jsonDecode(rawData);
       if (decoded is Map) {
         serverUrl = decoded['url']?.toString();
-        phone = decoded['phone']?.toString();
-        pin = decoded['pin']?.toString();
+        identifier = decoded['username']?.toString() ??
+            decoded['usuario']?.toString() ??
+            decoded['email']?.toString() ??
+            decoded['user']?.toString() ??
+            decoded['phone']?.toString();
+        password = decoded['password']?.toString() ??
+            decoded['pass']?.toString() ??
+            decoded['pin']?.toString();
       }
     } catch (_) {}
 
-    // 2. Try parsing pipe-separated format: GEEKS_DELIVERY|url|phone|pin
+    // 2. Try parsing pipe-separated format: GEEKS_DELIVERY|url|user|password
     if (serverUrl == null && rawData.startsWith('GEEKS_DELIVERY|')) {
       final parts = rawData.split('|');
       if (parts.length >= 4) {
         serverUrl = parts[1];
-        phone = parts[2];
-        pin = parts[3];
+        identifier = parts[2];
+        password = parts[3];
       }
     }
 
@@ -59,17 +65,19 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       try {
         final uri = Uri.parse(rawData);
         serverUrl = '${uri.scheme}://${uri.host}${uri.hasPort ? ":${uri.port}" : ""}';
-        phone = uri.queryParameters['phone'];
-        pin = uri.queryParameters['pin'];
+        identifier = uri.queryParameters['username'] ?? uri.queryParameters['user'] ?? uri.queryParameters['phone'];
+        password = uri.queryParameters['password'] ?? uri.queryParameters['pass'] ?? uri.queryParameters['pin'];
       } catch (_) {}
     }
 
-    if (phone != null || pin != null || serverUrl != null) {
+    if (identifier != null || password != null || serverUrl != null) {
       if (mounted) {
         Navigator.pop(context, {
           'url': serverUrl,
-          'phone': phone,
-          'pin': pin,
+          'identifier': identifier,
+          'password': password,
+          'phone': identifier,
+          'pin': password,
         });
       }
     } else {

@@ -6,7 +6,7 @@ import '../models/delivery_order.dart';
 import '../models/cash_summary.dart';
 
 class ApiService {
-  static const String _defaultServerUrl = 'https://compatible-hood-profiles-savannah.trycloudflare.com';
+  static const String _defaultServerUrl = 'https://pos.geeks.com.py';
   static const String _keyServerUrl = 'geeks_server_url';
   static const String _keyToken = 'geeks_auth_token';
   static const String _keyDriverJson = 'geeks_driver_json';
@@ -23,9 +23,17 @@ class ApiService {
     }
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getString(_keyServerUrl);
-    // Si no hay o venía de localhost/10.0.2.2 previo, usar el túnel público Cloudflare incrustado
-    if (stored == null || stored.isEmpty || stored.contains('10.0.2.2') || stored.contains('localhost')) {
+    // Si no hay, o venía de túneles temporales de prueba o localhost, migrar al servidor oficial de producción
+    if (stored == null ||
+        stored.isEmpty ||
+        stored.contains('10.0.2.2') ||
+        stored.contains('localhost') ||
+        stored.contains('trycloudflare.com') ||
+        stored.contains('post.geeks.com.py') ||
+        stored.contains('compatible-hood-profiles-savannah') ||
+        stored.contains('wait-dee-level-signals')) {
       _cachedServerUrl = _defaultServerUrl;
+      await prefs.setString(_keyServerUrl, _defaultServerUrl);
     } else {
       _cachedServerUrl = stored;
     }
@@ -36,6 +44,10 @@ class ApiService {
     var cleanUrl = url.trim();
     if (cleanUrl.endsWith('/')) {
       cleanUrl = cleanUrl.substring(0, cleanUrl.length - 1);
+    }
+    // Auto-corregir typo común post -> pos
+    if (cleanUrl.contains('post.geeks.com.py')) {
+      cleanUrl = cleanUrl.replaceAll('post.geeks.com.py', 'pos.geeks.com.py');
     }
     _cachedServerUrl = cleanUrl;
     final prefs = await SharedPreferences.getInstance();
@@ -64,7 +76,7 @@ class ApiService {
     return null;
   }
 
-  static Future<Map<String, dynamic>> login(String phone, String pin) async {
+  static Future<Map<String, dynamic>> login(String identifier, String password) async {
     try {
       final baseUrl = await getServerUrl();
       final uri = Uri.parse('$baseUrl/delivery_api/login');
@@ -73,7 +85,13 @@ class ApiService {
           .post(
             uri,
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'phone': phone, 'pin': pin}),
+            body: jsonEncode({
+              'username': identifier.trim(),
+              'email': identifier.trim(),
+              'phone': identifier.trim(),
+              'password': password.trim(),
+              'pin': password.trim(),
+            }),
           )
           .timeout(const Duration(seconds: 15));
 

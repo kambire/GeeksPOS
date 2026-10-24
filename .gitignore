@@ -20,6 +20,10 @@ userfiles/temp/*
 !userfiles/temp/index.html
 userfiles/pos_temp/*
 !userfiles/pos_temp/index.html
+userfiles/promos/*
+!userfiles/promos/index.html
+userfiles/comprobantes/*
+!userfiles/comprobantes/index.html
 
 # Archivos del sistema operativo / editores
 .DS_Store
@@ -40,6 +44,7 @@ application/config/lic.php
 # Builds de la app de repartidores: se publican como asset en GitHub Releases, no en el repo (limite 100 MB)
 *.apk
 *.aab
+*.sqlite
 
 # Logs de depuracion (pueden contener PINs/tokens) y datos de prueba locales
 *.log

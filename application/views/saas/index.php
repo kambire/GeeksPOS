@@ -12,6 +12,7 @@
         </div>
 
         <div class="card-body">
+            <div id="saas_flash_alert"></div>
 
             <!-- Métricas Generales -->
             <div class="row mb-3">
@@ -136,18 +137,27 @@
                                         <?php } ?>
                                     </td>
                                     <td>
+                                        <a href="<?= base_url('saas/edit/' . $loc['id']) ?>" class="btn btn-sm btn-warning btn-block mb-1 font-weight-bold" title="Editar datos del local, correo, usuario y contraseña">
+                                            <i class="fa fa-pencil"></i> Editar Perfil
+                                        </a>
                                         <a href="<?= base_url('saas/workflow/' . $loc['id']) ?>" class="btn btn-sm btn-primary btn-block mb-1" title="Gestionar y actualizar flujo de datos GeeksIA">
                                             <i class="fa fa-sitemap"></i> Flujo GeeksIA
                                         </a>
                                         <a href="<?= base_url('saas/impersonate/' . $loc['id']) ?>" class="btn btn-sm btn-success btn-block mb-1" title="Iniciar sesión como este local">
                                             <i class="fa fa-sign-in"></i> Entrar al POS
                                         </a>
-                                        <a href="<?= base_url('delivery_config?loc_id=' . $loc['id']) ?>" class="btn btn-sm btn-info btn-block mb-1" title="Configurar teléfonos, bot y repartidores 1-10">
+                                        <a href="<?= base_url('delivery_config/index/' . $loc['id']) ?>" class="btn btn-sm btn-info btn-block mb-1" title="Configurar teléfonos, bot y repartidores 1-10">
                                             <i class="fa fa-motorcycle"></i> Bot & Deliveries
                                         </a>
-                                        <a href="<?= base_url('delivery_config?loc_id=' . (int)$loc['id']) ?>#tab-geeksia" class="btn btn-sm btn-outline-secondary btn-block" title="La API key se ve y se rota desde Bot & Deliveries">
+                                        <a href="<?= base_url('p/' . (int)$loc['id']) ?>" target="_blank" class="btn btn-sm btn-outline-success btn-block mb-1 font-weight-bold" title="Abrir Web de Pedidos Online con Chat IA">
+                                            <i class="fa fa-shopping-bag"></i> Web de Pedidos
+                                        </a>
+                                        <a href="<?= base_url('delivery_config/index/' . (int)$loc['id']) ?>#tab-geeksia" class="btn btn-sm btn-outline-secondary btn-block mb-1" title="La API key se ve y se rota desde Bot & Deliveries">
                                             <i class="fa fa-key"></i> API Key (••••<?= $e(substr((string)$loc['api_key'], -4)) ?>)
                                         </a>
+                                        <button type="button" class="btn btn-sm btn-outline-danger btn-block font-weight-bold" onclick="modalEliminarLocal(<?= (int)$loc['id'] ?>, <?= $e($js($loc['cname'])) ?>)" title="Eliminar permanentemente este local y todos sus datos">
+                                            <i class="fa fa-trash"></i> Borrar Local
+                                        </button>
                                     </td>
                                 </tr>
                             <?php }
@@ -180,7 +190,111 @@
     </div>
 </div>
 
+<!-- Modal Confirmar Eliminación de Local -->
+<div class="modal fade" id="modalEliminarLocal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+            <div class="modal-header bg-danger text-white p-3">
+                <h5 class="modal-title font-weight-bold d-flex align-items-center mb-0 text-white">
+                    <i class="fa fa-exclamation-triangle mr-2"></i> Eliminar Local / Sucursal
+                </h5>
+                <button type="button" class="close text-white opacity-100" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body p-4 text-center">
+                <div class="mb-3">
+                    <div style="width: 64px; height: 64px; border-radius: 50%; background: #fee2e2; color: #dc2626; display: inline-flex; align-items: center; justify-content: center; font-size: 28px;">
+                        <i class="fa fa-trash"></i>
+                    </div>
+                </div>
+                <h5 class="font-weight-bold text-dark mb-2">¿Estás seguro de eliminar este local?</h5>
+                <p class="text-muted mb-3" style="font-size: 14px;">
+                    Estás a punto de eliminar permanentemente a: <br>
+                    <span class="badge badge-danger px-3 py-2 mt-1" style="font-size: 15px;" id="lbl_del_local_name">Local</span>
+                </p>
+
+                <div class="alert alert-warning text-left p-3 mb-0" style="font-size: 13px; border-radius: 10px; line-height: 1.5;">
+                    <i class="fa fa-warning mr-1 font-weight-bold text-danger"></i> <strong>Esta acción es irreversible.</strong> Se eliminarán en cascada:
+                    <ul class="mb-0 pl-3 mt-1 text-muted" style="font-size: 12.5px;">
+                        <li>Almacén, catálogo de productos y stock del local.</li>
+                        <li>Usuarios y empleados asignados a esta sucursal.</li>
+                        <li>Configuración del Bot IA, teléfonos y repartidores.</li>
+                        <li>Historial de pedidos delivery y cola de cocina.</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer bg-light p-3 border-top d-flex justify-content-between">
+                <button type="button" class="btn btn-secondary font-weight-bold px-3" data-dismiss="modal">
+                    Cancelar
+                </button>
+                <button type="button" class="btn btn-danger font-weight-bold px-4" id="btn_confirmar_eliminar_local" onclick="ejecutarEliminacionLocal()">
+                    <i class="fa fa-trash mr-1"></i> Sí, Eliminar Local Definitivamente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+var _localIdToDelete = 0;
+
+function modalEliminarLocal(locId, locName) {
+    _localIdToDelete = locId;
+    $('#lbl_del_local_name').text(locName + ' (ID #' + locId + ')');
+    $('#modalEliminarLocal').modal('show');
+}
+
+function ejecutarEliminacionLocal() {
+    if (!_localIdToDelete || _localIdToDelete <= 0) return;
+
+    var $btn = $('#btn_confirmar_eliminar_local');
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin mr-1"></i> Eliminando...');
+
+    var postData = {
+        loc_id: _localIdToDelete
+    };
+    if (typeof crsf_token !== 'undefined' && typeof crsf_hash !== 'undefined') {
+        postData[crsf_token] = crsf_hash;
+    }
+
+    $.ajax({
+        url: '<?= base_url("saas/delete/") ?>' + _localIdToDelete,
+        type: 'POST',
+        data: postData,
+        dataType: 'json',
+        success: function(res) {
+            $('#modalEliminarLocal').modal('hide');
+            $btn.prop('disabled', false).html('<i class="fa fa-trash mr-1"></i> Sí, Eliminar Local Definitivamente');
+            if (res.status === 'Success') {
+                $('#saas_flash_alert').html(
+                    '<div class="alert alert-success alert-dismissible fade show p-3 mb-3" style="border-radius:12px; font-size:14px;" role="alert">' +
+                    '<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>' +
+                    '<strong><i class="fa fa-check-circle mr-1"></i> ¡Local eliminado!</strong> ' + res.message +
+                    '</div>'
+                );
+                $('html, body').animate({ scrollTop: 0 }, 300);
+                setTimeout(function() {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                $('#saas_flash_alert').html(
+                    '<div class="alert alert-danger alert-dismissible fade show p-3 mb-3" style="border-radius:12px; font-size:14px;" role="alert">' +
+                    '<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>' +
+                    '<strong><i class="fa fa-exclamation-triangle mr-1"></i> Error:</strong> ' + (res.message || 'Error al eliminar') +
+                    '</div>'
+                );
+                $('html, body').animate({ scrollTop: 0 }, 300);
+            }
+        },
+        error: function(xhr) {
+            $('#modalEliminarLocal').modal('hide');
+            $btn.prop('disabled', false).html('<i class="fa fa-trash mr-1"></i> Sí, Eliminar Local Definitivamente');
+            alert('Error de conexión al intentar eliminar el local.');
+        }
+    });
+}
+
 function openTenantQR(instance) {
     $('#qr_modal_tenant_name').text('Instancia: ' + instance);
     $('#modalTenantQR').modal('show');

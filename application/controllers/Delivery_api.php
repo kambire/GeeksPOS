@@ -97,16 +97,16 @@ class Delivery_api extends CI_Controller
 
     /**
      * POST /delivery_api/login
-     * Body: {telefono, pin}
+     * Login por Usuario, Correo o Teléfono y Contraseña
+     * Body: {username|email|phone, password|pin}
      */
     public function login()
     {
         $payload = $this->get_payload();
-        $telefono = $payload['phone'] ?? ($payload['telefono'] ?? '');
-        $pin = $payload['pin'] ?? '';
+        $identifier = $payload['username'] ?? ($payload['email'] ?? ($payload['phone'] ?? ($payload['telefono'] ?? '')));
+        $password = $payload['password'] ?? ($payload['pin'] ?? '');
 
-        // Sin logs de depuración: el payload trae el PIN y la respuesta el token de sesión
-        $result = $this->delivery_model->driver_login($telefono, $pin, $this->client_ip());
+        $result = $this->delivery_model->driver_login($identifier, $password, $this->client_ip());
         if (!empty($result['status'])) {
             $result['success'] = true;
             $result['status'] = 'success';

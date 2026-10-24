@@ -56,16 +56,33 @@ class User extends CI_Controller
 
     public function checklogin()
     {
-        $user = $this->input->post('username');
+        $user = trim($this->input->post('username', true));
         $password = $this->input->post('password');
         $remember_me = $this->input->post('remember_me');
         $rem = false;
         if ($remember_me == 'on') {
             $rem = true;
         }
+
+        // Permite iniciar sesión con usuario (ej. 'cocina', 'admin') o con correo
+        if (!empty($user) && strpos($user, '@') === false) {
+            $this->db->select('email');
+            $this->db->where('username', $user);
+            $q = $this->db->get('geopos_users');
+            if ($row = $q->row()) {
+                $user = $row->email;
+            }
+        }
+
         if ($this->aauth->login($user, $password, $rem, $this->captcha)) {
             $this->aauth->applog("[Logged In] $user");
-            redirect('/dashboard/', 'refresh');
+            
+            // Si es usuario de cocina, redirigir directo al KDS de cocina
+            if ($this->aauth->get_user()->username == 'cocina') {
+                redirect('/kitchen/', 'refresh');
+            } else {
+                redirect('/dashboard/', 'refresh');
+            }
         } else {
 
             redirect('/user/?e=eyxde', 'refresh');

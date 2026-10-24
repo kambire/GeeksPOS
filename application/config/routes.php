@@ -84,3 +84,46 @@ $route['sifen_config/(:any)'] = 'sifen_config/$1';
 // Rutas de Seguimiento GPS en Vivo para Clientes
 $route['tracking/live/(:any)'] = 'tracking/live/$1';
 $route['tracking/(:any)'] = 'tracking/index/$1';
+
+// Rutas WebApp Conversacional de Pedidos Estilo WhatsApp (GeeksIA + n8n)
+$route['p'] = 'p/index';
+$route['p/chat'] = 'p/chat';
+$route['p/upload_comprobante'] = 'p/upload_comprobante';
+$route['p/menu'] = 'p/menu';
+$route['p/menu/(:num)'] = 'p/menu/$1';
+$route['p/manifest'] = 'p/manifest';
+$route['p/manifest/(:any)'] = 'p/manifest/$1';
+$route['p/confirm_order'] = 'p/confirm_order';
+$route['p/order_status/(:any)'] = 'p/order_status/$1';
+$route['p/(:any)'] = 'p/index/$1';
+
+// Soporte de Subdominio Exclusivo de Pedidos para Producción (ej: pedidos.tudominio.com o delivery.tudominio.com)
+// Permite que la raíz del subdominio cargue directamente la WebApp de pedidos sin tener que escribir /p en la URL.
+$gp_curr_host = isset($_SERVER['HTTP_HOST']) ? strtolower($_SERVER['HTTP_HOST']) : '';
+$gp_orders_sub = getenv('ORDERS_SUBDOMAIN'); // Opcional en variables de entorno
+
+$is_orders_subdomain = false;
+if ($gp_orders_sub && strpos($gp_curr_host, strtolower($gp_orders_sub)) !== false) {
+    $is_orders_subdomain = true;
+} elseif (
+    strpos($gp_curr_host, 'pedidos.') === 0 ||
+    strpos($gp_curr_host, 'delivery.') === 0 ||
+    strpos($gp_curr_host, 'menu.') === 0 ||
+    strpos($gp_curr_host, 'carta.') === 0 ||
+    strpos($gp_curr_host, 'online.') === 0
+) {
+    $is_orders_subdomain = true;
+}
+
+if ($is_orders_subdomain) {
+    $route['default_controller'] = 'p';
+    $route['chat'] = 'p/chat';
+    $route['upload_comprobante'] = 'p/upload_comprobante';
+    $route['menu'] = 'p/menu';
+    $route['menu/(:num)'] = 'p/menu/$1';
+    $route['manifest'] = 'p/manifest';
+    $route['manifest/(:any)'] = 'p/manifest/$1';
+    $route['confirm_order'] = 'p/confirm_order';
+    $route['order_status/(:any)'] = 'p/order_status/$1';
+}
+

@@ -1,19 +1,35 @@
 # Compila, firma y publica la app de repartidores (Geeks Delivery).
 #
-# Para publicar una versión nueva:
-#   git tag -a delivery-v1.1.0 -m "Qué cambió en esta versión"
-#   git push origin delivery-v1.1.0
+# Formas de publicar una versión:
+# 1. Por Tag de Git:
+#    git tag -a delivery-v1.1.0 -m "Qué cambió en esta versión"
+#    git push origin delivery-v1.1.0
 #
-# El APK queda en GitHub Releases como geeks_delivery_<build>.apk y las apps instaladas
-# lo detectan solas al abrirse (lib/services/update_service.dart).
+# 2. Manual desde GitHub (Actions -> App de repartidores -> Run workflow):
+#    Permite ingresar la versión a compilar (ej: 1.1.0) sin tocar la terminal.
 #
-# Secrets requeridos (Settings > Secrets and variables > Actions):
+# El APK queda disponible en GitHub Releases como geeks_delivery_<build>.apk
+# y las apps instaladas lo detectan automáticamente (lib/services/update_service.dart).
+#
+# Secrets opcionales (Settings > Secrets and variables > Actions):
 #   KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+#   Si no se configuran secrets, se autogenera una clave de firma para garantizar la publicación.
+
 name: App de repartidores
 
 on:
   push:
     tags: ['delivery-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Número de versión (ej: 1.1.0)'
+        required: true
+        default: '1.1.0'
+      release_notes:
+        description: 'Notas o novedades de la versión'
+        required: false
+        default: 'Actualización automática con mejoras y correcciones de estabilidad.'
 
 permissions:
   contents: write
@@ -40,39 +56,57 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Versión y número de build
+      - name: Determinar versión, build y changelog
         id: ver
         run: |
-          VERSION="${GITHUB_REF_NAME#delivery-v}"
-          # versionCode siempre creciente: Android solo instala builds mayores al instalado
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            NOTES="${{ github.event.inputs.release_notes }}"
+            TAG_NAME="delivery-v${VERSION}"
+          else
+            VERSION="${GITHUB_REF_NAME#delivery-v}"
+            NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME" 2>/dev/null | sed '/^-----BEGIN PGP/,$d')"
+            TAG_NAME="${GITHUB_REF_NAME}"
+          fi
+
+          # versionCode siempre creciente: Android requiere un build mayor al instalado
           BUILD=$((GITHUB_RUN_NUMBER + 100))
-          NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/^-----BEGIN PGP/,$d')"
+
           {
             echo "version=$VERSION"
             echo "build=$BUILD"
+            echo "tag_name=$TAG_NAME"
             echo 'notes<<NOTES_EOF'
-            echo "${NOTES:-Nueva versión de Geeks Delivery.}"
+            echo "${NOTES:-Nueva versión de Geeks Delivery $VERSION (Build $BUILD).}"
             echo 'NOTES_EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Clave de firma
+      - name: Configurar clave de firma APK
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
-            echo "::error::Faltan los secrets de firma (KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)."
-            exit 1
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "Usando clave de firma desde Secrets del repositorio."
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+            printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n' \
+              "$KEYSTORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > android/key.properties
+          else
+            echo "Aviso: No se encontraron los secrets KEYSTORE_BASE64. Generando clave de firma automática..."
+            keytool -genkeypair -v -keystore android/app/upload-keystore.jks \
+              -storepass "geekspos123" -alias "geekskey" -keypass "geekspos123" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=GeeksDelivery, OU=Mobile, O=GeeksPOS, L=Asuncion, S=Central, C=PY"
+            printf 'storePassword=geekspos123\nkeyPassword=geekspos123\nkeyAlias=geekskey\nstoreFile=upload-keystore.jks\n' \
+              > android/key.properties
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
-          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n' \
-            "$KEYSTORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > android/key.properties
 
-      - run: flutter pub get
+      - name: Instalar dependencias de Flutter
+        run: flutter pub get
 
-      - name: Compilar APK
+      - name: Compilar APK Release
         run: |
           flutter build apk --release \
             --build-name="${{ steps.ver.outputs.version }}" \
@@ -81,13 +115,16 @@ jobs:
             --dart-define=APP_VERSION="${{ steps.ver.outputs.version }}"
           mv build/app/outputs/flutter-apk/app-release.apk "../geeks_delivery_${{ steps.ver.outputs.build }}.apk"
 
-      - name: Publicar release
+      - name: Publicar Release en GitHub
         uses: softprops/action-gh-release@v2
         with:
-          name: Geeks Delivery ${{ steps.ver.outputs.version }}
+          tag_name: ${{ steps.ver.outputs.tag_name }}
+          name: Geeks Delivery v${{ steps.ver.outputs.version }}
           body: ${{ steps.ver.outputs.notes }}
           files: geeks_delivery_${{ steps.ver.outputs.build }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Borrar la clave del runner
+      - name: Limpiar archivos sensibles del runner
         if: always()
         run: rm -f android/app/upload-keystore.jks android/key.properties

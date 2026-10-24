@@ -165,5 +165,91 @@ class Locations_model extends CI_Model
         return $query->result_array();
     }
 
+    /**
+     * Eliminación en cascada de un local tenant y todos sus registros asociados
+     * Protege siempre la Sede Matriz (loc_id = 0) y los usuarios de la matriz.
+     */
+    public function delete_cascade($loc_id)
+    {
+        $loc_id = (int)$loc_id;
+        if ($loc_id <= 0) {
+            return array('status' => 'Error', 'message' => 'No está permitido eliminar la Sede Matriz (ID 0) o un ID no válido.');
+        }
+
+        $location = $this->db->where('id', $loc_id)->get('geopos_locations')->row_array();
+        if (!$location) {
+            return array('status' => 'Error', 'message' => 'El local seleccionado no existe o ya fue eliminado.');
+        }
+
+        $loc_name = $location['cname'] ?? ('Local #' . $loc_id);
+
+        $this->db->trans_start();
+
+        // 1. Almacenes vinculados a este local
+        $warehouses = $this->db->select('id')->where('loc', $loc_id)->get('geopos_warehouse')->result_array();
+        $ware_ids = array_column($warehouses, 'id');
+        if (!empty($location['ware'])) {
+            $ware_ids[] = (int)$location['ware'];
+        }
+        $ware_ids = array_unique(array_filter($ware_ids));
+
+        // 2. Productos y movimientos de stock en esos almacenes
+        if (!empty($ware_ids)) {
+            $products = $this->db->select('pid')->where_in('warehouse', $ware_ids)->get('geopos_products')->result_array();
+            $pids = array_column($products, 'pid');
+            if (!empty($pids)) {
+                $this->db->where_in('pid', $pids)->delete('geopos_products');
+            }
+            $this->db->where_in('id', $ware_ids)->delete('geopos_warehouse');
+        }
+        $this->db->where('loc', $loc_id)->delete('geopos_warehouse');
+
+        // 3. Usuarios y Empleados vinculados a este local
+        $current_user_id = ($this->load->is_loaded('aauth') && $this->aauth->get_user()) ? (int)$this->aauth->get_user()->id : 0;
+        $users = $this->db->select('id')->where('loc', $loc_id)->get('geopos_users')->result_array();
+        $uids = array_column($users, 'id');
+        // Salvaguarda: nunca eliminar el usuario actualmente logueado ni superadministradores de la matriz
+        $uids = array_diff($uids, array($current_user_id));
+        if (!empty($uids)) {
+            $this->db->where_in('id', $uids)->delete('geopos_employees');
+            $this->db->where_in('id', $uids)->delete('geopos_users');
+        }
+
+        // 4. Módulos Operativos (WhatsApp bot, Deliveries, Pedidos, Cocina)
+        $this->db->where('loc_id', $loc_id)->delete('geopos_whatsapp_config');
+        $this->db->where('loc_id', $loc_id)->delete('geopos_deliveries');
+        $this->db->where('loc_id', $loc_id)->delete('geopos_delivery_orders');
+        $this->db->where('loc_id', $loc_id)->delete('geopos_kitchen_orders');
+        if ($this->db->table_exists('geopos_restkeys')) {
+            $this->db->where('loc_id', $loc_id)->delete('geopos_restkeys');
+        }
+
+        // 5. Facturas, líneas y transacciones vinculadas a este local
+        $invoices = $this->db->select('id')->where('loc', $loc_id)->get('geopos_invoices')->result_array();
+        $inv_ids = array_column($invoices, 'id');
+        if (!empty($inv_ids)) {
+            $this->db->where_in('tid', $inv_ids)->delete('geopos_invoice_items');
+            $this->db->where_in('id', $inv_ids)->delete('geopos_invoices');
+        }
+        $this->db->where('loc', $loc_id)->delete('geopos_transactions');
+        $this->db->where('loc', $loc_id)->delete('geopos_draft');
+        $this->db->where('loc', $loc_id)->delete('geopos_quotes');
+        $this->db->where('loc', $loc_id)->delete('geopos_stock_r');
+        $this->db->where('loc', $loc_id)->delete('geopos_purchase');
+        if ($this->db->field_exists('location', 'geopos_promo')) {
+            $this->db->where('location', $loc_id)->delete('geopos_promo');
+        }
+
+        // 6. Eliminar el registro del local
+        $this->db->where('id', $loc_id)->delete('geopos_locations');
+
+        $this->db->trans_complete();
+
+        if ($this->db->trans_status() === FALSE) {
+            return array('status' => 'Error', 'message' => 'Ocurrió un error en la base de datos al intentar eliminar el local.');
+        }
+
+        return array('status' => 'Success', 'message' => 'El local "' . $loc_name . '" y todos sus registros asociados fueron eliminados correctamente.');
+    }
 
 }

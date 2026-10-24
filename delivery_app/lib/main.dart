@@ -25,9 +25,9 @@ void main() {
   );
   runApp(const GeeksDeliveryApp());
 
-  // Buscar actualizaciones en GitHub cuando la app ya está en pantalla
+  // Buscar actualizaciones en GitHub Releases cuando la app ya está en pantalla
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    Future.delayed(const Duration(seconds: 3), UpdateService.checkAndPrompt);
+    Future.delayed(const Duration(seconds: 3), () => UpdateService.checkAndPrompt());
   });
 }
 
@@ -48,6 +48,11 @@ class GeeksDeliveryApp extends StatelessWidget {
           secondary: const Color(0xFF0F172A),
         ),
         fontFamily: 'Roboto',
+        // Tarjetas blancas y sin tinte de Material 3 para que se distingan del fondo gris
+        cardTheme: const CardThemeData(
+          color: Colors.white,
+          surfaceTintColor: Colors.transparent,
+        ),
       ),
       home: const LoginScreen(),
     );

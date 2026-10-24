@@ -20,6 +20,107 @@
     <div class="message"><strong>Alert</strong>: Application is running in Development/Debug mode! Set it production mode <a href="<?=base_url('settings/debug') ?>">here</a></div>
 </div>
 <?php } ?>
+<!-- SECCIÓN OPERATIVA DESTACADA: CAJA, COCINA Y DELIVERY -->
+<div class="row mb-2">
+    <!-- PANEL CAJA / POS -->
+    <div class="col-xl-4 col-lg-4 col-12 mb-1">
+        <div class="card h-100 shadow-sm border-0" style="background: linear-gradient(135deg, #0b2545 0%, #133d73 100%); border-radius: 14px; overflow: hidden;">
+            <div class="card-body p-2 d-flex flex-column justify-content-between text-white">
+                <div class="d-flex align-items-center mb-1">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center mr-2 shadow" style="width: 52px; height: 52px; background: rgba(31, 111, 255, 0.25); border: 1.5px solid rgba(255,255,255,0.2);">
+                        <i class="icon-handbag font-medium-4 text-white"></i>
+                    </div>
+                    <div>
+                        <span class="badge badge-pill badge-primary text-uppercase" style="font-size: 10px; letter-spacing: 0.5px;">Caja & Ventas</span>
+                        <h4 class="font-weight-bold text-white mb-0 mt-0">Panel Caja / POS</h4>
+                    </div>
+                </div>
+                <p class="font-small-3 text-white-50 mb-2">
+                    Cobro ágil en mostrador, emisión de tickets térmicos y facturación electrónica SIFEN.
+                </p>
+                <div class="d-flex align-items-center justify-content-between pt-1 border-top border-secondary">
+                    <span class="font-small-2 text-white font-weight-bold">
+                        <i class="fa fa-money text-success"></i> <?= amountExchange($todaysales, 0, $this->aauth->get_user()->loc) ?>
+                    </span>
+                    <a href="<?= base_url('pos_invoices/create') ?>" class="btn btn-primary btn-sm font-weight-bold shadow-sm" style="border-radius: 8px;">
+                        <i class="icon-handbag"></i> Abrir Caja POS
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL COCINA (KDS) -->
+    <div class="col-xl-4 col-lg-4 col-12 mb-1">
+        <div class="card h-100 shadow-sm border-0" style="background: linear-gradient(135deg, #2c1b0c 0%, #442409 100%); border-radius: 14px; overflow: hidden; border: 1.5px solid rgba(240, 136, 62, 0.4) !important;">
+            <div class="card-body p-2 d-flex flex-column justify-content-between text-white">
+                <div class="d-flex align-items-center mb-1">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center mr-2 shadow" style="width: 52px; height: 52px; background: rgba(240, 136, 62, 0.3); border: 1.5px solid rgba(240, 136, 62, 0.5);">
+                        <i class="fa fa-cutlery font-medium-4 text-warning"></i>
+                    </div>
+                    <div>
+                        <span class="badge badge-pill badge-warning text-uppercase" style="font-size: 10px; letter-spacing: 0.5px;">KDS en Vivo</span>
+                        <h4 class="font-weight-bold text-white mb-0 mt-0">Panel de Cocina</h4>
+                    </div>
+                </div>
+                <p class="font-small-3 text-white-50 mb-2">
+                    Gestión visual de comandas en tiempo real, cronómetro de preparación y alertas de demora.
+                </p>
+                <div class="d-flex align-items-center justify-content-between pt-1 border-top border-secondary">
+                    <span class="font-small-2 font-weight-bold text-warning" id="dash-kitchen-status">
+                        <i class="fa fa-fire"></i> <span id="dash-kitchen-count">0</span> comandas activas
+                    </span>
+                    <a href="<?= base_url('kitchen') ?>" target="_blank" class="btn btn-warning btn-sm font-weight-bold shadow-sm text-dark" style="border-radius: 8px; background: #f0883e; border: none;">
+                        <i class="fa fa-external-link"></i> Abrir Pantalla KDS
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL DELIVERY & DESPACHO -->
+    <div class="col-xl-4 col-lg-4 col-12 mb-1">
+        <div class="card h-100 shadow-sm border-0" style="background: linear-gradient(135deg, #092635 0%, #134b5f 100%); border-radius: 14px; overflow: hidden;">
+            <div class="card-body p-2 d-flex flex-column justify-content-between text-white">
+                <div class="d-flex align-items-center mb-1">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center mr-2 shadow" style="width: 52px; height: 52px; background: rgba(0, 180, 216, 0.25); border: 1.5px solid rgba(255,255,255,0.2);">
+                        <i class="fa fa-motorcycle font-medium-4 text-info"></i>
+                    </div>
+                    <div>
+                        <span class="badge badge-pill badge-info text-uppercase" style="font-size: 10px; letter-spacing: 0.5px;">Despacho Móvil</span>
+                        <h4 class="font-weight-bold text-white mb-0 mt-0">Delivery & Flota</h4>
+                    </div>
+                </div>
+                <p class="font-small-3 text-white-50 mb-2">
+                    Gestión de los 10 turnos de repartidores, app móvil Flutter y tracking en mapa para clientes.
+                </p>
+                <div class="d-flex align-items-center justify-content-between pt-1 border-top border-secondary">
+                    <span class="font-small-2 text-white font-weight-bold">
+                        <i class="fa fa-check-circle text-info"></i> 10 Slots de Reparto
+                    </span>
+                    <a href="<?= base_url('delivery_config') ?>" class="btn btn-info btn-sm font-weight-bold shadow-sm" style="border-radius: 8px;">
+                        <i class="fa fa-cogs"></i> Ver Reparto
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function pollKitchenBadge() {
+        fetch('<?= base_url("kitchen/badge_stats") ?>')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status) {
+                    const el = document.getElementById('dash-kitchen-count');
+                    if (el) el.textContent = data.active_count;
+                }
+            })
+            .catch(() => {});
+        setTimeout(pollKitchenBadge, 10000);
+    })();
+</script>
 <div class="row">
     <div class="col-xl-3 col-lg-6 col-12">
         <div class="card">

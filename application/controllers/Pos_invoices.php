@@ -511,6 +511,14 @@ class Pos_invoices extends CI_Controller
                 $validtoken = hash_hmac('ripemd160', $invocieno, $this->config->item('encryption_key'));
                 $link = base_url('billing/view?id=' . $invocieno . '&token=' . $validtoken);
                 if ($transok) {
+                    // Sincronizar automáticamente la comanda a la pantalla de cocina (KDS)
+                    try {
+                        $this->load->model('kitchen_model', 'kitchen');
+                        $this->kitchen->sync_invoice_to_kitchen($invocieno);
+                    } catch (\Throwable $e) {
+                        log_message('error', 'Kitchen Sync Error: ' . $e->getMessage());
+                    }
+
                     $sifen_badge = '';
                     try {
                         $this->load->library('sifen');

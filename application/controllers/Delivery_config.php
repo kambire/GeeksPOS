@@ -108,12 +108,14 @@ class Delivery_config extends CI_Controller
         $config['ia_api_key_hint'] = $this->delivery_model->get_ia_key_hint($loc_id, $config['ia_api_key'] ?? '');
         $config['ia_api_key'] = '';
 
-        // Decode promos semana for individual day inputs
+        // Decode promos semana for dynamic promo cards and legacy day inputs
+        $config['promos_list'] = $this->delivery_model->normalize_promos($config['promos_semana'] ?? '');
         $promos_decoded = [];
-        if (!empty($config['promos_semana'])) {
-            $parsed = json_decode($config['promos_semana'], true);
-            if (is_array($parsed)) {
-                $promos_decoded = $parsed;
+        foreach ($config['promos_list'] as $p) {
+            foreach ($p['dias'] as $d) {
+                if (empty($promos_decoded[$d])) {
+                    $promos_decoded[$d] = $p['titulo'];
+                }
             }
         }
         $config['promos_decoded'] = $promos_decoded;
@@ -170,16 +172,55 @@ class Delivery_config extends CI_Controller
         $dias_arr = $this->input->post('dias_atencion', true);
         $dias_str = is_array($dias_arr) ? implode(',', $dias_arr) : ($dias_arr ?: 'Mon,Tue,Wed,Thu,Fri,Sat,Sun');
 
-        // Package promos semana
-        $promos_map = [
-            'mon' => $this->input->post('promo_mon', true) ?: '',
-            'tue' => $this->input->post('promo_tue', true) ?: '',
-            'wed' => $this->input->post('promo_wed', true) ?: '',
-            'thu' => $this->input->post('promo_thu', true) ?: '',
-            'fri' => $this->input->post('promo_fri', true) ?: '',
-            'sat' => $this->input->post('promo_sat', true) ?: '',
-            'sun' => $this->input->post('promo_sun', true) ?: ''
-        ];
+        // Package promos semana (Soporta lista ilimitada de promociones con fotos y fallback legado)
+        $promos_json_raw = $this->input->post('promos_json');
+        $promos_list = [];
+        if (!empty($promos_json_raw)) {
+            $decoded_promos = json_decode($promos_json_raw, true);
+            if (is_array($decoded_promos)) {
+                $promos_list = $this->delivery_model->normalize_promos($decoded_promos);
+            }
+        }
+
+        if (empty($promos_list)) {
+            $legacy_map = [];
+            foreach (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as $d_k) {
+                $val = $this->input->post('promo_' . $d_k, true);
+                if (!empty($val)) {
+                    $legacy_map[$d_k] = $val;
+                }
+            }
+            if (!empty($legacy_map)) {
+                $promos_list = $this->delivery_model->normalize_promos($legacy_map);
+            }
+        }
+
+        // Procesar tramos de tarifas por distancia escalonada
+        $tramos = [];
+        $tramos_desde = $this->input->post('tramos_desde');
+        $tramos_hasta = $this->input->post('tramos_hasta');
+        $tramos_costo = $this->input->post('tramos_costo');
+        $tramos_etiq  = $this->input->post('tramos_etiqueta');
+
+        if (is_array($tramos_desde) && is_array($tramos_hasta) && is_array($tramos_costo)) {
+            for ($i = 0; $i < count($tramos_desde); $i++) {
+                $d = isset($tramos_desde[$i]) && $tramos_desde[$i] !== '' ? (float)$tramos_desde[$i] : null;
+                $h = isset($tramos_hasta[$i]) && $tramos_hasta[$i] !== '' ? (float)$tramos_hasta[$i] : null;
+                $c = isset($tramos_costo[$i]) && $tramos_costo[$i] !== '' ? (int)$tramos_costo[$i] : null;
+                $e = isset($tramos_etiq[$i]) ? trim($tramos_etiq[$i]) : '';
+                if ($d !== null && $h !== null && $c !== null && $h > $d && $c >= 0) {
+                    $tramos[] = [
+                        'desde'    => $d,
+                        'hasta'    => $h,
+                        'costo'    => $c,
+                        'etiqueta' => $e
+                    ];
+                }
+            }
+            usort($tramos, function($a, $b) {
+                return $a['desde'] <=> $b['desde'];
+            });
+        }
 
         $config_data = [
             'phone_caja'             => $this->input->post('phone_caja', true),
@@ -195,9 +236,12 @@ class Delivery_config extends CI_Controller
             'mensaje_cerrado'        => $this->input->post('mensaje_cerrado', true),
             'is_local_cerrado'       => $this->input->post('is_local_cerrado') ? 1 : 0,
             'is_delivery_cerrado'    => $this->input->post('is_delivery_cerrado') ? 1 : 0,
+            'tarifa_tipo'            => $this->input->post('tarifa_tipo', true) ?: 'tramos',
             'radio_max_km'           => $this->input->post('radio_max_km', true),
             'costo_envio_base'       => $this->input->post('costo_envio_base', true),
+            'km_base'                => $this->input->post('km_base', true) ?: 3.0,
             'costo_por_km'           => $this->input->post('costo_por_km', true),
+            'tarifas_tramos'         => $tramos,
             'tiempo_entrega_min'     => $this->input->post('tiempo_entrega_min', true),
             'tiempo_retiro_min'      => $this->input->post('tiempo_retiro_min', true),
             'banco_nombre'           => $this->input->post('banco_nombre', true),
@@ -219,7 +263,7 @@ class Delivery_config extends CI_Controller
             'ia_tono'                => $this->input->post('ia_tono', true),
             'ia_instrucciones_extra' => $this->input->post('ia_instrucciones_extra', true),
             'tipo_flujo'             => $this->input->post('tipo_flujo', true) ?: 'restaurante',
-            'promos_semana'          => $promos_map,
+            'promos_semana'          => $promos_list,
             'horario'                => $this->input->post('horario')
         ];
         $this->delivery_model->save_config($loc_id, $config_data);
@@ -237,8 +281,11 @@ class Delivery_config extends CI_Controller
             $slots_data[] = [
                 'slot'     => $s,
                 'nombre'   => $this->input->post("slot_{$s}_nombre", true) ?: ('Repartidor ' . $s),
+                'usuario'  => $this->input->post("slot_{$s}_usuario", true) ?: ('delivery' . $s),
+                'email'    => $this->input->post("slot_{$s}_email", true) ?: ('delivery' . $s . '@geekspos.com'),
+                'password' => $this->input->post("slot_{$s}_password", true),
                 'telefono' => $this->input->post("slot_{$s}_telefono", true),
-                'pin'      => $this->input->post("slot_{$s}_pin", true), // vacío o inválido = PIN aleatorio nuevo
+                'pin'      => $this->input->post("slot_{$s}_pin", true),
                 'activo'   => $this->input->post("slot_{$s}_activo") ? 1 : 0,
                 'ocupado'  => $this->input->post("slot_{$s}_ocupado") ? 1 : 0
             ];
@@ -267,6 +314,73 @@ class Delivery_config extends CI_Controller
             'status'  => 'Success',
             'message' => 'Contadores de pedidos del día reiniciados a 0 correctamente.'
         ]);
+    }
+
+    /**
+     * AJAX Promo Image Uploader
+     * Subida asíncrona de flyers, fotos y banners promocionales
+     */
+    public function upload_promo_image()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        if ($this->input->method() !== 'post') {
+            echo json_encode(['status' => 'Error', 'message' => 'Método no permitido.']);
+            return;
+        }
+
+        $loc_id = (int)$this->input->post('loc_id', true);
+        if ($loc_id && !$this->can_manage($loc_id)) {
+            echo json_encode(['status' => 'Error', 'message' => 'No autorizado para subir archivos en este local.']);
+            return;
+        }
+
+        if (empty($_FILES['promo_image']['name'])) {
+            echo json_encode(['status' => 'Error', 'message' => 'No se seleccionó ningún archivo de imagen.']);
+            return;
+        }
+
+        $upload_dir = FCPATH . 'userfiles/promos/';
+        if (!is_dir($upload_dir)) {
+            @mkdir($upload_dir, 0777, true);
+        }
+
+        $file = $_FILES['promo_image'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+
+        if (!in_array($ext, $allowed_exts)) {
+            echo json_encode(['status' => 'Error', 'message' => 'Formato no permitido. Utilice imágenes JPG, PNG o WEBP.']);
+            return;
+        }
+
+        if ($file['size'] > 8 * 1024 * 1024) {
+            echo json_encode(['status' => 'Error', 'message' => 'La imagen supera el límite permitido de 8 MB.']);
+            return;
+        }
+
+        $check = @getimagesize($file['tmp_name']);
+        if ($check === false) {
+            echo json_encode(['status' => 'Error', 'message' => 'El archivo subido no es una imagen válida.']);
+            return;
+        }
+
+        $filename = 'promo_' . time() . '_' . substr(md5(uniqid(mt_rand(), true)), 0, 8) . '.' . $ext;
+        $target_path = $upload_dir . $filename;
+
+        if (move_uploaded_file($file['tmp_name'], $target_path)) {
+            @chmod($target_path, 0666);
+            $rel_path = 'userfiles/promos/' . $filename;
+            echo json_encode([
+                'status'    => 'Success',
+                'message'   => '¡Flyer promocional subido con éxito!',
+                'file_path' => $rel_path,
+                'file_url'  => base_url($rel_path),
+                'filename'  => $filename
+            ]);
+        } else {
+            echo json_encode(['status' => 'Error', 'message' => 'No se pudo guardar la imagen en el servidor. Verifique permisos.']);
+        }
     }
 
     /**
@@ -349,5 +463,103 @@ class Delivery_config extends CI_Controller
             'message' => 'Nueva API key generada. La anterior dejó de funcionar: actualizala en tus integraciones.',
             'api_key' => $new_key
         ]);
+    }
+
+    /**
+     * Vista de Monitoreo de Pedidos Asignados y Reasignación de Repartidores
+     */
+    public function orders($loc_id = null)
+    {
+        $loc_id = $this->resolve_target_location($loc_id);
+
+        $head['usernm'] = $this->aauth->get_user()->username;
+        $head['title']  = 'Monitor de Deliveries & Reasignación de Pedidos';
+
+        $is_superadmin = $this->is_platform_admin();
+
+        // Location data
+        $location = null;
+        if ($loc_id > 0) {
+            $location = $this->db->where('id', $loc_id)->get('geopos_locations')->row_array();
+        } else {
+            $sys = $this->db->get('geopos_system')->row_array();
+            $location = ['id' => 0, 'cname' => $sys['cname'] ?? 'Empresa Principal'];
+        }
+
+        $all_locations = [];
+        if ($is_superadmin) {
+            $all_locations = $this->db->order_by('id', 'ASC')->get('geopos_locations')->result_array();
+        }
+
+        $orders = $this->delivery_model->get_assigned_orders_admin($loc_id);
+        $drivers = $this->delivery_model->get_drivers_for_reassign($loc_id);
+
+        $data = [
+            'loc_id'        => $loc_id,
+            'is_superadmin' => $is_superadmin,
+            'location'      => $location,
+            'all_locations' => $all_locations,
+            'orders'        => $orders,
+            'drivers'       => $drivers
+        ];
+
+        $this->load->view('fixed/header', $head);
+        $this->load->view('delivery_config/orders', $data);
+        $this->load->view('fixed/footer');
+    }
+
+    /**
+     * AJAX endpoint para refrescar en vivo la tabla de pedidos
+     */
+    public function ajax_orders()
+    {
+        $loc_id = $this->resolve_target_location($this->input->get('loc_id'));
+        $estado = $this->input->get('estado');
+
+        $orders = $this->delivery_model->get_assigned_orders_admin($loc_id, $estado);
+        $drivers = $this->delivery_model->get_drivers_for_reassign($loc_id);
+
+        header('Content-Type: application/json');
+        echo json_encode([
+            'status'  => true,
+            'orders'  => $orders,
+            'drivers' => $drivers,
+            'time'    => date('H:i:s')
+        ]);
+    }
+
+    /**
+     * AJAX Reasignar Pedido
+     */
+    public function ajax_reassign()
+    {
+        $order_id = (int)$this->input->post('order_id');
+        $new_slot = (int)$this->input->post('new_slot');
+        $motivo   = $this->input->post('motivo');
+        $loc_id   = $this->resolve_target_location($this->input->post('loc_id'));
+
+        if (!$this->can_manage($loc_id)) {
+            echo json_encode(['status' => false, 'message' => 'No tiene permisos para modificar pedidos en este local']);
+            return;
+        }
+
+        $result = $this->delivery_model->reassign_order($order_id, $new_slot, $loc_id, $motivo);
+
+        header('Content-Type: application/json');
+        echo json_encode($result);
+    }
+
+    /**
+     * AJAX: Simular cálculo de costo de envío en tiempo real según distancia
+     */
+    public function simulate_fee()
+    {
+        $loc_id = $this->resolve_target_location($this->input->get_post('loc_id'));
+        $km     = (float)$this->input->get_post('km');
+
+        $result = $this->delivery_model->calculate_delivery_cost($loc_id, $km);
+
+        header('Content-Type: application/json');
+        echo json_encode($result);
     }
 }

@@ -78,6 +78,26 @@
                                                                         title="Access POS"><i
                                     class="icon-handbag"></i><?php echo $this->lang->line('POS') ?> </a>
                     </li>  <?php    } ?>
+                    <li class="nav-item d-none d-md-block nav-link">
+                        <a href="<?= base_url() ?>kitchen" target="_blank"
+                           class="btn btn-warning btn-md text-dark font-weight-bold shadow-sm t_tooltip"
+                           style="background: #f0883e; border: none; border-radius: 8px;"
+                           title="Pantalla de Cocina (KDS) en Vivo">
+                            <i class="fa fa-cutlery"></i> Cocina <span class="badge badge-pill badge-danger" id="nav-kitchen-count" style="vertical-align: middle; margin-left: 4px;">0</span>
+                        </a>
+                    </li>
+                    <?php 
+                    $curr_user_loc = (int)$this->aauth->get_user()->loc;
+                    $top_p_url = base_url('p' . ($curr_user_loc > 0 ? '/' . $curr_user_loc : ''));
+                    ?>
+                    <li class="nav-item d-none d-md-block nav-link">
+                        <a href="<?= $top_p_url ?>" target="_blank"
+                           class="btn btn-success btn-md text-white font-weight-bold shadow-sm t_tooltip"
+                           style="background: #008069; border: none; border-radius: 8px;"
+                           title="Abrir Web de Pedidos Online con Chat IA">
+                            <i class="fa fa-shopping-bag"></i> Pedidos Online
+                        </a>
+                    </li>
                     <li class="nav-item nav-search"><a class="nav-link nav-link-search" href="#" aria-haspopup="true"
                                                        aria-expanded="false" id="search-input"><i
                                     class="ficon ft-search"></i><span class="d-md-none gp-nav-label ml-1"><?php echo $this->lang->line('Search Customer') ?></span></a>
@@ -650,13 +670,22 @@
                     <li class="nav-item"><a href="<?= base_url(); ?>pos_invoices/create"><i
                                     class="icon-handbag"></i><span><?= $this->lang->line('POS') ?></span></a>
                     </li>
+                    <li class="nav-item"><a href="<?= base_url(); ?>kitchen" target="_blank"><i
+                                    class="fa fa-cutlery"></i><span>Pantalla Cocina (KDS)</span></a>
+                    </li>
                 <?php } ?>
                 <?php if ($this->aauth->get_user()->roleid >= 4) { ?>
                     <li class="nav-item <?php if ($this->li_a == "sifen") echo ' active'; ?>"><a href="<?= base_url(); ?>sifen_config"><i
                                     class="fa fa-certificate text-danger"></i><span>Facturación SIFEN</span></a>
                     </li>
-                    <li class="nav-item <?php if ($this->li_a == "delivery_config") echo ' active'; ?>"><a href="<?= base_url(); ?>delivery_config"><i
+                    <li class="nav-item <?php if ($this->li_a == "delivery_config" && $this->uri->segment(2) != "orders") echo ' active'; ?>"><a href="<?= base_url(); ?>delivery_config"><i
                                     class="fa fa-motorcycle text-warning"></i><span>GeeksIA Restaurantes</span></a>
+                    </li>
+                    <li class="nav-item <?php if ($this->uri->segment(1) == "delivery_config" && $this->uri->segment(2) == "orders") echo ' active'; ?>"><a href="<?= base_url(); ?>delivery_config/orders"><i
+                                    class="fa fa-map-marker text-info"></i><span>Monitor Deliveries</span></a>
+                    </li>
+                    <li class="nav-item"><a href="<?= base_url(); ?>p<?= ($curr_user_loc > 0 ? '/' . $curr_user_loc : '') ?>" target="_blank"><i
+                                    class="fa fa-shopping-bag text-success"></i><span>Web Pedidos IA</span><span class="badge badge-success float-right mr-1" style="font-size:10px; padding:2px 6px;">PWA</span></a>
                     </li>
                 <?php } ?>
             <?php
@@ -1188,3 +1217,18 @@
         <div class="content-header row">
         </div>
         <div class="content-body">
+
+<script>
+    (function pollNavKitchen() {
+        fetch('<?= base_url("kitchen/badge_stats") ?>')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status) {
+                    const el = document.getElementById('nav-kitchen-count');
+                    if (el) el.textContent = data.active_count;
+                }
+            })
+            .catch(() => {});
+        setTimeout(pollNavKitchen, 12000);
+    })();
+</script>

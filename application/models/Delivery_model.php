@@ -36,6 +36,19 @@ class Delivery_model extends CI_Model
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
         }
 
+        // Columnas dinámicas para tarifas por tramos y kilometraje
+        if ($this->db->table_exists('geopos_whatsapp_config')) {
+            if (!$this->db->field_exists('tarifa_tipo', 'geopos_whatsapp_config')) {
+                @$this->db->query("ALTER TABLE `geopos_whatsapp_config` ADD COLUMN `tarifa_tipo` varchar(20) DEFAULT 'tramos'");
+            }
+            if (!$this->db->field_exists('km_base', 'geopos_whatsapp_config')) {
+                @$this->db->query("ALTER TABLE `geopos_whatsapp_config` ADD COLUMN `km_base` decimal(5,2) DEFAULT '3.00'");
+            }
+            if (!$this->db->field_exists('tarifas_tramos', 'geopos_whatsapp_config')) {
+                @$this->db->query("ALTER TABLE `geopos_whatsapp_config` ADD COLUMN `tarifas_tramos` text DEFAULT NULL");
+            }
+        }
+
         if (!$this->db->table_exists('geopos_deliveries')) {
             $this->db->query("CREATE TABLE IF NOT EXISTS `geopos_deliveries` (
                 `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -94,9 +107,12 @@ class Delivery_model extends CI_Model
                 'mensaje_cerrado'        => 'Hola, en este momento nuestro local se encuentra cerrado. Te esperamos en nuestro horario habitual.',
                 'is_local_cerrado'       => 0,
                 'is_delivery_cerrado'    => 0,
+                'tarifa_tipo'            => 'tramos',
                 'radio_max_km'           => 10.00,
                 'costo_envio_base'       => 10000,
+                'km_base'                => 3.00,
                 'costo_por_km'           => 2000,
+                'tarifas_tramos'         => '',
                 'tiempo_entrega_min'     => '35 a 45 minutos',
                 'tiempo_retiro_min'      => '15 a 20 minutos',
                 'banco_nombre'           => '',
@@ -135,6 +151,27 @@ class Delivery_model extends CI_Model
 
         // Parse day-by-day business hours
         $row['horarios_semana_parsed'] = $this->parse_horarios_semana($row);
+
+        // Parse tramos de distancia para tarifas
+        $tramos_arr = [];
+        if (!empty($row['tarifas_tramos'])) {
+            $decoded = json_decode($row['tarifas_tramos'], true);
+            if (is_array($decoded)) {
+                $tramos_arr = $decoded;
+            }
+        }
+        if (empty($tramos_arr)) {
+            $tramos_arr = [
+                ['desde' => 0.0, 'hasta' => 1.5, 'costo' => 5000, 'etiqueta' => 'Zona 1 (Barrio cercano)'],
+                ['desde' => 1.5, 'hasta' => 4.0, 'costo' => 10000, 'etiqueta' => 'Zona 2 (Estándar)'],
+                ['desde' => 4.0, 'hasta' => 7.0, 'costo' => 15000, 'etiqueta' => 'Zona 3 (Media distancia)'],
+                ['desde' => 7.0, 'hasta' => 10.0, 'costo' => 20000, 'etiqueta' => 'Zona 4 (Límite urbano)'],
+                ['desde' => 10.0, 'hasta' => 15.0, 'costo' => 25000, 'etiqueta' => 'Zona 5 (Interurbano / Lejano)']
+            ];
+        }
+        $row['tarifas_tramos_list'] = $tramos_arr;
+        $row['tarifa_tipo'] = !empty($row['tarifa_tipo']) ? $row['tarifa_tipo'] : 'tramos';
+        $row['km_base'] = isset($row['km_base']) ? (float)$row['km_base'] : 3.00;
 
         return $row;
     }
@@ -205,6 +242,165 @@ class Delivery_model extends CI_Model
     }
 
     /**
+     * Normaliza cualquier formato de promociones (array de objetos moderno, JSON string o mapa legado mon=>texto)
+     * a una lista estructurada de objetos de promoción con soporte para imágenes y selección múltiple de días.
+     */
+    public function normalize_promos($promos_raw)
+    {
+        if (empty($promos_raw)) {
+            return [];
+        }
+        if (is_string($promos_raw)) {
+            $trimmed = trim($promos_raw);
+            if ($trimmed === '' || $trimmed === '[]' || $trimmed === '{}') {
+                return [];
+            }
+            $decoded = json_decode($trimmed, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $promos_raw = $decoded;
+            } else {
+                return [];
+            }
+        }
+        if (!is_array($promos_raw)) {
+            return [];
+        }
+
+        $catalog = self::get_dias_semana_catalog();
+        $normalized = [];
+
+        // Comprobar si es el mapa legado {'mon': 'texto', 'tue': 'texto', ...}
+        $is_legacy = false;
+        foreach ($catalog as $day_k => $day_info) {
+            if (isset($promos_raw[$day_k]) && is_string($promos_raw[$day_k])) {
+                $is_legacy = true;
+                break;
+            }
+        }
+
+        if ($is_legacy) {
+            foreach ($catalog as $day_k => $day_info) {
+                $text = trim((string)($promos_raw[$day_k] ?? ''));
+                if ($text !== '') {
+                    $normalized[] = [
+                        'id'           => 'promo_legacy_' . $day_k,
+                        'titulo'       => 'Promo de ' . $day_info['nombre'],
+                        'badge'        => 'Especial ' . $day_info['corto'],
+                        'precio_promo' => '',
+                        'descripcion'  => $text,
+                        'dias'         => [$day_k],
+                        'imagen'       => '',
+                        'activo'       => 1
+                    ];
+                }
+            }
+            return $normalized;
+        }
+
+        // Es una lista de promociones dinámicas ilimitadas
+        foreach ($promos_raw as $p) {
+            if (!is_array($p)) continue;
+            $titulo = trim((string)($p['titulo'] ?? ''));
+            $desc = trim((string)($p['descripcion'] ?? ''));
+            if ($titulo === '' && $desc === '') {
+                continue;
+            }
+
+            $dias = $p['dias'] ?? [];
+            if (is_string($dias)) {
+                $dias = array_filter(array_map('trim', explode(',', $dias)));
+            } elseif (!is_array($dias)) {
+                $dias = [];
+            }
+            $dias = array_values(array_map('strtolower', $dias));
+
+            $img = trim((string)($p['imagen'] ?? ''));
+
+            $normalized[] = [
+                'id'           => !empty($p['id']) ? (string)$p['id'] : ('promo_' . uniqid()),
+                'titulo'       => $titulo,
+                'badge'        => trim((string)($p['badge'] ?? '')),
+                'precio_promo' => trim((string)($p['precio_promo'] ?? '')),
+                'descripcion'  => $desc,
+                'dias'         => $dias,
+                'imagen'       => $img,
+                'activo'       => isset($p['activo']) ? ((int)$p['activo'] ? 1 : 0) : 1
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Obtiene todas las promociones activas para el día indicado (o el día actual en Asunción).
+     * Cada elemento incluye además 'imagen_url' absoluta para WebApp y WhatsApp Bot.
+     */
+    public function get_active_promos_today($loc_id, $day_code = null)
+    {
+        $cfg = $this->get_config($loc_id);
+        $promos = $this->normalize_promos($cfg['promos_semana'] ?? '');
+
+        if (empty($day_code)) {
+            $day_code = strtolower(date('D')); // 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'
+        } else {
+            $day_code = strtolower(trim((string)$day_code));
+        }
+
+        $active_today = [];
+        foreach ($promos as $p) {
+            if (empty($p['activo'])) {
+                continue;
+            }
+
+            $dias = $p['dias'] ?? [];
+            $applies = false;
+
+            if (empty($dias) || in_array('all', $dias) || in_array('todos', $dias)) {
+                $applies = true;
+            } elseif (in_array($day_code, $dias)) {
+                $applies = true;
+            }
+
+            if ($applies) {
+                $img = $p['imagen'] ?? '';
+                $img_url = '';
+                if (!empty($img)) {
+                    if (strpos($img, 'http://') === 0 || strpos($img, 'https://') === 0) {
+                        $img_url = $img;
+                    } else {
+                        $img_url = base_url($img);
+                    }
+                }
+                $p['imagen_url'] = $img_url;
+                $active_today[] = $p;
+            }
+        }
+
+        return $active_today;
+    }
+
+    /**
+     * Genera un resumen en texto claro de las promociones vigentes hoy para ser inyectado en el prompt de IA o chat.
+     */
+    public function get_promos_summary_text_today($loc_id, $day_code = null)
+    {
+        $promos = $this->get_active_promos_today($loc_id, $day_code);
+        if (empty($promos)) {
+            return '';
+        }
+
+        $lines = [];
+        foreach ($promos as $p) {
+            $badge = !empty($p['badge']) ? "[{$p['badge']}] " : "";
+            $precio = !empty($p['precio_promo']) ? " ({$p['precio_promo']})" : "";
+            $desc = !empty($p['descripcion']) ? ": {$p['descripcion']}" : "";
+            $lines[] = "- {$badge}{$p['titulo']}{$desc}{$precio}";
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
      * Save WhatsApp numbers and all operational configuration for a location
      */
     public function save_config($loc_id, $data)
@@ -227,11 +423,8 @@ class Delivery_model extends CI_Model
         // Promos semana format handler
         $promos_semana_val = null;
         if (isset($data['promos_semana'])) {
-            if (is_array($data['promos_semana'])) {
-                $promos_semana_val = json_encode($data['promos_semana'], JSON_UNESCAPED_UNICODE);
-            } else {
-                $promos_semana_val = trim($data['promos_semana']);
-            }
+            $normalized = $this->normalize_promos($data['promos_semana']);
+            $promos_semana_val = json_encode($normalized, JSON_UNESCAPED_UNICODE);
         }
 
         // Horarios semana day-by-day handler
@@ -288,9 +481,12 @@ class Delivery_model extends CI_Model
             'mensaje_cerrado'        => isset($data['mensaje_cerrado']) ? trim($data['mensaje_cerrado']) : '',
             'is_local_cerrado'       => !empty($data['is_local_cerrado']) ? 1 : 0,
             'is_delivery_cerrado'    => !empty($data['is_delivery_cerrado']) ? 1 : 0,
+            'tarifa_tipo'            => isset($data['tarifa_tipo']) ? trim($data['tarifa_tipo']) : 'tramos',
             'radio_max_km'           => isset($data['radio_max_km']) ? (float)$data['radio_max_km'] : 10.00,
             'costo_envio_base'       => isset($data['costo_envio_base']) ? (int)$data['costo_envio_base'] : 10000,
+            'km_base'                => isset($data['km_base']) ? (float)$data['km_base'] : 3.00,
             'costo_por_km'           => isset($data['costo_por_km']) ? (int)$data['costo_por_km'] : 2000,
+            'tarifas_tramos'         => isset($data['tarifas_tramos']) ? (is_array($data['tarifas_tramos']) ? json_encode($data['tarifas_tramos'], JSON_UNESCAPED_UNICODE) : trim($data['tarifas_tramos'])) : '',
             'tiempo_entrega_min'     => isset($data['tiempo_entrega_min']) ? trim($data['tiempo_entrega_min']) : '35 a 45 minutos',
             'tiempo_retiro_min'      => isset($data['tiempo_retiro_min']) ? trim($data['tiempo_retiro_min']) : '15 a 20 minutos',
             'banco_nombre'           => isset($data['banco_nombre']) ? trim($data['banco_nombre']) : '',
@@ -384,12 +580,9 @@ class Delivery_model extends CI_Model
                 $fields['horarios_semana'] = $hs;
             }
         }
-        if (array_key_exists('promos_semana', $data) && is_array($data['promos_semana'])) {
-            $promos = [];
-            foreach (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as $d) {
-                $promos[$d] = isset($data['promos_semana'][$d]) ? mb_substr(trim((string)$data['promos_semana'][$d]), 0, 500) : '';
-            }
-            $fields['promos_semana'] = json_encode($promos, JSON_UNESCAPED_UNICODE);
+        if (array_key_exists('promos_semana', $data)) {
+            $normalized = $this->normalize_promos($data['promos_semana']);
+            $fields['promos_semana'] = json_encode($normalized, JSON_UNESCAPED_UNICODE);
         }
 
         if ($fields) {
@@ -556,25 +749,49 @@ class Delivery_model extends CI_Model
             if ($slot < 1 || $slot > 10) continue;
 
             $nombre   = isset($item['nombre']) ? trim($item['nombre']) : ('Repartidor ' . $slot);
+            $usuario  = isset($item['usuario']) ? trim($item['usuario']) : ('delivery' . $slot);
+            $email    = isset($item['email']) ? trim($item['email']) : ('delivery' . $slot . '@geekspos.com');
+            $raw_pass = isset($item['password']) ? trim($item['password']) : '';
             $telefono = isset($item['telefono']) ? $this->clean_phone($item['telefono']) : '';
             $activo   = !empty($item['activo']) ? 1 : 0;
             $ocupado  = !empty($item['ocupado']) ? 1 : 0;
-            $pin      = !empty($item['pin']) ? substr(preg_replace('/[^0-9]/', '', $item['pin']), 0, 6) : '';
-            if (strlen($pin) < 4) $pin = (string)random_int(1000, 9999);
-
             $existing = $this->db->where('loc_id', $loc_id)->where('slot', $slot)->get('geopos_deliveries')->row();
+
+            $pin = !empty($item['pin']) ? substr(preg_replace('/[^0-9]/', '', $item['pin']), 0, 6) : '';
+            if (strlen($pin) < 4) {
+                $pin = (!empty($existing) && !empty($existing->pin)) ? $existing->pin : (string)random_int(1000, 9999);
+            }
+
+            // Si el teléfono se asigna a este local ($loc_id), limpiarlo de cualquier otro local
+            // para evitar que el repartidor quede duplicado o colgado en dos sucursales a la vez.
+            if (!empty($telefono)) {
+                $this->db->where('loc_id !=', $loc_id)
+                         ->where('telefono', $telefono)
+                         ->update('geopos_deliveries', [
+                             'telefono'   => '',
+                             'activo'     => 0,
+                             'ocupado'    => 0,
+                             'auth_token' => null
+                         ]);
+            }
 
             $payload = [
                 'nombre'   => $nombre,
+                'username' => $usuario,
+                'email'    => $email,
                 'telefono' => $telefono,
                 'activo'   => $activo,
                 'ocupado'  => $ocupado,
                 'pin'      => $pin
             ];
 
+            if (!empty($raw_pass)) {
+                $payload['password'] = password_hash($raw_pass, PASSWORD_BCRYPT);
+            }
+
             if ($existing) {
-                // Cambiar teléfono o PIN, o desactivar el slot, cierra la sesión del repartidor en la app
-                if ($existing->pin !== $pin || $existing->telefono !== $telefono || !$activo) {
+                // Cambiar teléfono, contraseña, o desactivar el slot, cierra la sesión previa del repartidor
+                if ($existing->pin !== $pin || $existing->telefono !== $telefono || !$activo || !empty($raw_pass)) {
                     $payload['auth_token'] = null;
                     $payload['auth_token_expires'] = null;
                 }
@@ -582,6 +799,9 @@ class Delivery_model extends CI_Model
             } else {
                 $payload['loc_id'] = $loc_id;
                 $payload['slot'] = $slot;
+                if (empty($payload['password'])) {
+                    $payload['password'] = password_hash('delivery123', PASSWORD_BCRYPT);
+                }
                 $payload['pedidos_hoy'] = 0;
                 $this->db->insert('geopos_deliveries', $payload);
             }
@@ -663,32 +883,37 @@ class Delivery_model extends CI_Model
 
         $chosen = $this->db->get()->row_array();
 
-        if (!$chosen) {
-            return [
-                'assigned' => false,
-                'message'  => 'No hay repartidores activos o disponibles en este momento',
-                'delivery' => null
-            ];
-        }
-
-        // Increment counter & update timestamp
-        $new_count = (int)$chosen['pedidos_hoy'] + 1;
         $now = date('Y-m-d H:i:s');
+        $slot_val = 0;
+        $driver_name = 'En espera de asignación';
+        $driver_phone = '';
+        $estado = 'pendiente';
+        $is_assigned = false;
 
-        $this->db->where('id', $chosen['id'])->update('geopos_deliveries', [
-            'pedidos_hoy'      => $new_count,
-            'ultimo_pedido_at' => $now,
-            'ocupado'          => 1 // Marcar ocupado mientras entrega este pedido
-        ]);
+        if ($chosen) {
+            $is_assigned = true;
+            $estado = 'asignado';
+            $new_count = (int)$chosen['pedidos_hoy'] + 1;
 
-        // Record last assigned slot in config
-        $this->db->where('loc_id', $loc_id)->update('geopos_whatsapp_config', [
-            'last_assigned_slot' => $chosen['slot']
-        ]);
+            $this->db->where('id', $chosen['id'])->update('geopos_deliveries', [
+                'pedidos_hoy'      => $new_count,
+                'ultimo_pedido_at' => $now,
+                'ocupado'          => 1 // Marcar ocupado mientras entrega este pedido
+            ]);
 
-        $chosen['pedidos_hoy'] = $new_count;
-        $chosen['ultimo_pedido_at'] = $now;
-        $chosen['ocupado'] = 1;
+            // Record last assigned slot in config
+            $this->db->where('loc_id', $loc_id)->update('geopos_whatsapp_config', [
+                'last_assigned_slot' => $chosen['slot']
+            ]);
+
+            $chosen['pedidos_hoy'] = $new_count;
+            $chosen['ultimo_pedido_at'] = $now;
+            $chosen['ocupado'] = 1;
+
+            $slot_val = (int)$chosen['slot'];
+            $driver_name = $chosen['nombre'];
+            $driver_phone = $chosen['telefono'];
+        }
 
         // Generar hash de tracking en vivo y registrar en geopos_delivery_orders
         $tracking_hash = bin2hex(random_bytes(16));
@@ -698,10 +923,10 @@ class Delivery_model extends CI_Model
             'loc_id'            => $loc_id,
             'invoice_id'        => $order_id ? (int)$order_id : null,
             'order_number'      => $order_num,
-            'delivery_slot'     => (int)$chosen['slot'],
-            'delivery_nombre'   => $chosen['nombre'],
-            'delivery_telefono' => $chosen['telefono'],
-            'estado'            => 'asignado',
+            'delivery_slot'     => $slot_val,
+            'delivery_nombre'   => $driver_name,
+            'delivery_telefono' => $driver_phone,
+            'estado'            => $estado,
             'cliente_nombre'    => !empty($order_details['cliente_nombre']) ? $order_details['cliente_nombre'] : 'Cliente',
             'cliente_telefono'  => !empty($order_details['cliente_telefono']) ? $order_details['cliente_telefono'] : '',
             'direccion_entrega' => !empty($order_details['direccion_entrega']) ? $order_details['direccion_entrega'] : (!empty($order_details['direccion']) ? $order_details['direccion'] : 'A convenir'),
@@ -721,21 +946,30 @@ class Delivery_model extends CI_Model
 
         $this->db->insert('geopos_delivery_orders', $delivery_order_data);
         $delivery_order_id = $this->db->insert_id();
+
+        // Sync order directly to Kitchen Display System (KDS)
+        try {
+            $this->load->model('kitchen_model', 'kitchen');
+            $this->kitchen->sync_delivery_to_kitchen($delivery_order_id);
+        } catch (\Throwable $e) {
+            log_message('error', 'Delivery to Kitchen sync error: ' . $e->getMessage());
+        }
+
         $tracking_url = base_url('tracking/' . $tracking_hash);
 
         return [
-            'assigned'          => true,
+            'assigned'          => $is_assigned,
             'order_id'          => $order_id ? (int)$order_id : null,
             'delivery_order_id' => $delivery_order_id,
             'tracking_hash'     => $tracking_hash,
             'tracking_url'      => $tracking_url,
-            'delivery'          => [
+            'delivery'          => $chosen ? [
                 'slot'             => (int)$chosen['slot'],
                 'nombre'           => $chosen['nombre'],
                 'telefono'         => $chosen['telefono'],
-                'pedidos_hoy'      => $new_count,
+                'pedidos_hoy'      => $chosen['pedidos_hoy'],
                 'ultimo_pedido_at' => $now
-            ]
+            ] : null
         ];
     }
 
@@ -918,16 +1152,11 @@ class Delivery_model extends CI_Model
         $delivery_cerrado = !empty($cfg['is_delivery_cerrado']);
         $local_cerrado = $is_override_cerrado || !$abierto;
 
-        // Parse promos semana
-        $promos_semana = [];
-        if (!empty($cfg['promos_semana'])) {
-            $decoded = json_decode($cfg['promos_semana'], true);
-            if (is_array($decoded)) {
-                $promos_semana = $decoded;
-            }
-        }
+        // Parse promos semana y promos activas de hoy
+        $promos_semana = $this->normalize_promos($cfg['promos_semana'] ?? '');
         $dia_key_lower = strtolower($current_weekday);
-        $promo_del_dia = $promos_semana[$dia_key_lower] ?? ($promos_semana[$current_weekday] ?? '');
+        $promociones_hoy = $this->get_active_promos_today($loc_id, $dia_key_lower);
+        $promo_del_dia = $this->get_promos_summary_text_today($loc_id, $dia_key_lower);
 
         // Numeros de prueba array
         $numeros_prueba = [];
@@ -999,9 +1228,12 @@ class Delivery_model extends CI_Model
             'mensaje_cerrado'         => $mensaje_cerrado,
 
             // 3. Tarifas, Radio y Tiempos de Entrega
+            'tarifa_tipo'             => $cfg['tarifa_tipo'] ?? 'tramos',
             'radio_km'                => (float)($cfg['radio_max_km'] ?: 10.0),
             'costo_envio_base'        => (int)($cfg['costo_envio_base'] ?: 10000),
+            'km_base'                 => (float)($cfg['km_base'] ?: 3.0),
             'costo_por_km'            => (int)($cfg['costo_por_km'] ?: 2000),
+            'tarifas_tramos'          => $cfg['tarifas_tramos_list'] ?? [],
             'tiempo_entrega'          => !empty($cfg['tiempo_entrega_min']) ? $cfg['tiempo_entrega_min'] : '35 a 45 minutos',
             'tiempo_retiro'           => !empty($cfg['tiempo_retiro_min']) ? $cfg['tiempo_retiro_min'] : '15 a 20 minutos',
 
@@ -1046,8 +1278,89 @@ class Delivery_model extends CI_Model
             'ia_instrucciones_extra'  => $cfg['ia_instrucciones_extra'] ?? '',
             'promo_del_dia'           => $promo_del_dia,
             'promos_semana'           => $promos_semana,
+            'promociones_hoy'         => $promociones_hoy,
 
             'updated_at'              => $cfg['updated_at'] ?? date('Y-m-d H:i:s')
+        ];
+    }
+
+    /**
+     * Calcula la tarifa de envío según la distancia en km y la estrategia configurada:
+     * - 'tramos': según rangos escalonados (ej: 0-1.5 km = 5.000, 1.5-4 km = 10.000)
+     * - 'km': costo base hasta km_base + costo por km adicional
+     * - 'hibrido': tramos escalonados y, si excede el último tramo dentro del radio max, suma por km extra
+     */
+    public function calculate_delivery_cost($loc_id, $distance_km)
+    {
+        $cfg = $this->get_config($loc_id);
+        $distance = round(max(0, (float)$distance_km), 2);
+        $max_km = (float)($cfg['radio_max_km'] ?: 10.0);
+
+        if ($distance > $max_km) {
+            return [
+                'entregable'       => false,
+                'costo'            => null,
+                'costo_formateado' => 'Fuera de Cobertura',
+                'distancia'        => $distance,
+                'max_km'           => $max_km,
+                'detalle'          => "La distancia ({$distance} km) supera el radio máximo de entrega ({$max_km} km). Se ofrecerá retiro en el local."
+            ];
+        }
+
+        $tipo = $cfg['tarifa_tipo'] ?? 'tramos';
+        $tramos = $cfg['tarifas_tramos_list'] ?? [];
+        $costo = null;
+        $matched_tramo = null;
+        $detalle = '';
+
+        if ($tipo === 'tramos' || $tipo === 'hibrido') {
+            foreach ($tramos as $tramo) {
+                $d = (float)$tramo['desde'];
+                $h = (float)$tramo['hasta'];
+                if ($distance >= $d && $distance <= $h) {
+                    $costo = (int)$tramo['costo'];
+                    $matched_tramo = $tramo;
+                    break;
+                }
+            }
+        }
+
+        if ($costo === null || $tipo === 'km') {
+            $costo_base = (int)($cfg['costo_envio_base'] ?: 10000);
+            $km_base = (float)($cfg['km_base'] ?: 3.0);
+            $costo_km = (int)($cfg['costo_por_km'] ?: 2000);
+
+            if ($tipo === 'hibrido' && !empty($tramos)) {
+                $last_tramo = end($tramos);
+                $last_hasta = (float)$last_tramo['hasta'];
+                $last_costo = (int)$last_tramo['costo'];
+                $km_extra = max(0, $distance - $last_hasta);
+                $costo = $last_costo + (int)ceil($km_extra) * $costo_km;
+                $detalle = "Tramo máx ({$last_costo} Gs) + {$km_extra} km extra x {$costo_km} Gs/km";
+            } else {
+                if ($distance <= $km_base) {
+                    $costo = $costo_base;
+                    $detalle = "Tarifa base fija (" . number_format($costo_base, 0, ',', '.') . " Gs) dentro de {$km_base} km";
+                } else {
+                    $km_extra = $distance - $km_base;
+                    $costo = $costo_base + (int)ceil($km_extra) * $costo_km;
+                    $detalle = "Base " . number_format($costo_base, 0, ',', '.') . " Gs + " . ceil($km_extra) . " km extra x " . number_format($costo_km, 0, ',', '.') . " Gs/km";
+                }
+            }
+        } else {
+            $etiqueta = !empty($matched_tramo['etiqueta']) ? " ({$matched_tramo['etiqueta']})" : '';
+            $detalle = "Tramo de {$matched_tramo['desde']} km a {$matched_tramo['hasta']} km{$etiqueta}";
+        }
+
+        return [
+            'entregable'       => true,
+            'costo'            => $costo,
+            'costo_formateado' => number_format($costo, 0, ',', '.') . ' Gs',
+            'distancia'        => $distance,
+            'max_km'           => $max_km,
+            'tipo'             => $tipo,
+            'detalle'          => $detalle,
+            'tramo'            => $matched_tramo
         ];
     }
 
@@ -1056,54 +1369,76 @@ class Delivery_model extends CI_Model
     // =========================================================================
 
     /**
-     * Autenticación del repartidor con Teléfono + PIN de 4 dígitos
+     * Autenticación del repartidor con Usuario / Correo y Contraseña
+     * Soporta también teléfono y PIN como fallback para compatibilidad completa.
      */
-    const LOGIN_MAX_FAILS_PHONE = 5;   // intentos fallidos por teléfono...
-    const LOGIN_MAX_FAILS_IP    = 20;  // ...y por IP
-    const LOGIN_WINDOW_MIN      = 15;  // dentro de esta ventana (minutos)
+    const LOGIN_MAX_FAILS_PHONE = 5;
+    const LOGIN_MAX_FAILS_IP    = 20;
+    const LOGIN_WINDOW_MIN      = 15;
     const DRIVER_TOKEN_DAYS     = 30;
 
-    public function driver_login($telefono, $pin, $ip = '')
+    public function driver_login($identifier, $password, $ip = '')
     {
-        $raw_phone = $this->clean_phone($telefono);
-        $clean_pin = preg_replace('/[^0-9]/', '', (string)$pin);
-        $ip = substr((string)$ip, 0, 45);
+        $identifier = trim((string)$identifier);
+        $password   = trim((string)$password);
+        $ip         = substr((string)$ip, 0, 45);
 
-        // Se exige el teléfono completo (mínimo 8 dígitos) y el PIN: ya no se acepta login solo por PIN o por número de slot
-        if (strlen($raw_phone) < 8 || strlen($clean_pin) < 4) {
-            return ['status' => false, 'message' => 'Ingresá tu número de teléfono completo y tu PIN'];
-        }
-        $tail8 = substr($raw_phone, -8);
-
-        if ($this->login_blocked($tail8, $ip)) {
-            return ['status' => false, 'message' => 'Demasiados intentos fallidos. Esperá ' . self::LOGIN_WINDOW_MIN . ' minutos o pedí un PIN nuevo al encargado.'];
+        if (empty($identifier) || empty($password)) {
+            return ['status' => false, 'message' => 'Ingresá tu usuario o correo y tu contraseña'];
         }
 
-        // Candidatos por los últimos 8 dígitos (acepta 0981..., 981... o 595981...); comparación final en PHP
-        $candidates = $this->db->like('telefono', $tail8, 'before')
-                               ->where('telefono !=', '')
-                               ->get('geopos_deliveries')
-                               ->result_array();
+        $clean_phone = $this->clean_phone($identifier);
+        $tail8 = (strlen($clean_phone) >= 8) ? substr($clean_phone, -8) : '';
+
+        // Buscar candidatos en geopos_deliveries
+        $this->db->group_start();
+        $this->db->where('LOWER(username)', strtolower($identifier));
+        $this->db->or_where('LOWER(email)', strtolower($identifier));
+        if ($tail8) {
+            $this->db->or_like('telefono', $tail8, 'before');
+        }
+        if (is_numeric($identifier) && (int)$identifier >= 1 && (int)$identifier <= 10) {
+            $this->db->or_where('slot', (int)$identifier);
+        }
+        $this->db->group_end();
+        $this->db->order_by('activo', 'DESC');
+        $this->db->order_by('id', 'DESC');
+        $candidates = $this->db->get('geopos_deliveries')->result_array();
+
+        if (empty($candidates)) {
+            return ['status' => false, 'message' => 'Usuario, correo o teléfono no encontrado.'];
+        }
+
         $driver = null;
-        $matches = 0;
         foreach ($candidates as $c) {
-            if (substr($this->clean_phone($c['telefono']), -8) === $tail8 && hash_equals((string)$c['pin'], $clean_pin)) {
+            $pass_valid = false;
+            // 1. Verificar contraseña cifrada (bcrypt o sha256)
+            if (!empty($c['password'])) {
+                if (password_verify($password, $c['password'])) {
+                    $pass_valid = true;
+                } elseif (hash_equals((string)$c['password'], hash('sha256', $password))) {
+                    $pass_valid = true;
+                }
+            }
+            // 2. Fallback: verificar PIN de 4 dígitos si la contraseña coincide con el PIN
+            if (!$pass_valid && !empty($c['pin']) && hash_equals((string)$c['pin'], (string)$password)) {
+                $pass_valid = true;
+            }
+
+            if ($pass_valid) {
                 $driver = $c;
-                $matches++;
+                break;
             }
         }
 
-        if ($matches !== 1) {
-            $this->db->insert('geopos_delivery_login_attempts', ['ip' => $ip, 'phone_tail' => $tail8, 'success' => 0, 'created_at' => date('Y-m-d H:i:s')]);
-            return ['status' => false, 'message' => $matches > 1
-                ? 'Tu teléfono está registrado en más de un local con el mismo PIN. Pedí al encargado un PIN nuevo.'
-                : 'PIN o Teléfono incorrecto. Verifica el PIN en el panel web'];
+        if (!$driver) {
+            $this->db->insert('geopos_delivery_login_attempts', ['ip' => $ip, 'phone_tail' => substr($identifier, 0, 20), 'success' => 0, 'created_at' => date('Y-m-d H:i:s')]);
+            return ['status' => false, 'message' => 'Contraseña incorrecta. Verificá tus credenciales.'];
         }
 
-        $this->db->insert('geopos_delivery_login_attempts', ['ip' => $ip, 'phone_tail' => $tail8, 'success' => 1, 'created_at' => date('Y-m-d H:i:s')]);
+        $this->db->insert('geopos_delivery_login_attempts', ['ip' => $ip, 'phone_tail' => substr($identifier, 0, 20), 'success' => 1, 'created_at' => date('Y-m-d H:i:s')]);
 
-        // Al iniciar sesión exitosamente, activar el repartidor automáticamente.
-        // Solo se guarda el hash del token, con vencimiento.
+        // Al iniciar sesión exitosamente, activar el repartidor automáticamente
         $token = bin2hex(random_bytes(32));
         $this->db->where('id', $driver['id'])->update('geopos_deliveries', [
             'auth_token'         => hash('sha256', $token),
@@ -1120,7 +1455,10 @@ class Delivery_model extends CI_Model
                 'id'          => (int)$driver['id'],
                 'slot'        => (int)$driver['slot'],
                 'nombre'      => $driver['nombre'],
+                'usuario'     => $driver['username'] ?? ('delivery' . $driver['slot']),
+                'email'       => $driver['email'] ?? ('delivery' . $driver['slot'] . '@geekspos.com'),
                 'telefono'    => $driver['telefono'],
+                'activo'      => 1,
                 'ocupado'     => (int)$driver['ocupado'],
                 'pedidos_hoy' => (int)$driver['pedidos_hoy']
             ],
@@ -1470,5 +1808,171 @@ class Delivery_model extends CI_Model
         $res = curl_exec($ch);
         curl_close($ch);
         return $res;
+    }
+
+    /**
+     * Obtener pedidos de delivery para el panel de monitoreo y reasignación
+     */
+    public function get_assigned_orders_admin($loc_id, $estado = null)
+    {
+        $loc_id = (int)$loc_id;
+        $this->db->where('loc_id', $loc_id);
+
+        if (!empty($estado) && $estado !== 'todos') {
+            $this->db->where('estado', $estado);
+        } else {
+            // Mostrar pedidos activos o entregados hoy
+            $this->db->where("(estado IN ('asignado', 'en_camino', 'en_puerta') OR DATE(created_at) = CURDATE())");
+        }
+
+        $this->db->order_by('id', 'DESC');
+        $rows = $this->db->get('geopos_delivery_orders')->result_array();
+
+        $now = time();
+        $orders = [];
+        foreach ($rows as $r) {
+            $items = [];
+            if (!empty($r['items_json'])) {
+                $dec = json_decode($r['items_json'], true);
+                if (is_array($dec)) $items = $dec;
+            }
+
+            $assigned_ts = !empty($r['assigned_at']) ? strtotime($r['assigned_at']) : strtotime($r['created_at']);
+            $minutos = $assigned_ts ? max(0, round(($now - $assigned_ts) / 60)) : 0;
+
+            $r['items'] = $items;
+            $r['minutos_transcurridos'] = $minutos;
+            $r['tracking_url'] = base_url('tracking/' . $r['tracking_hash']);
+            $orders[] = $r;
+        }
+
+        return $orders;
+    }
+
+    /**
+     * Obtener lista de repartidores disponibles del local con contador de pedidos activos
+     */
+    public function get_drivers_for_reassign($loc_id)
+    {
+        $loc_id = (int)$loc_id;
+        $drivers = $this->db->where('loc_id', $loc_id)
+                            ->where("(nombre IS NOT NULL AND nombre != '') OR (telefono IS NOT NULL AND telefono != '')")
+                            ->order_by('slot', 'ASC')
+                            ->get('geopos_deliveries')
+                            ->result_array();
+
+        foreach ($drivers as &$d) {
+            $active_orders = $this->db->where('loc_id', $loc_id)
+                                      ->where('delivery_slot', (int)$d['slot'])
+                                      ->where_in('estado', ['asignado', 'en_camino', 'en_puerta'])
+                                      ->count_all_results('geopos_delivery_orders');
+            $d['pedidos_activos'] = $active_orders;
+            $d['estado_texto'] = $active_orders > 0 ? "Ocupado ($active_orders pedidos en curso)" : "Libre / Disponible";
+        }
+
+        return $drivers;
+    }
+
+    /**
+     * Reasignar un pedido de un repartidor a otro
+     */
+    public function reassign_order($order_id, $new_slot, $loc_id, $motivo = '')
+    {
+        $order_id = (int)$order_id;
+        $new_slot = (int)$new_slot;
+        $loc_id = (int)$loc_id;
+
+        $order = $this->db->where('id', $order_id)
+                          ->where('loc_id', $loc_id)
+                          ->get('geopos_delivery_orders')
+                          ->row_array();
+
+        if (!$order) {
+            return ['status' => false, 'message' => 'Pedido no encontrado en este local'];
+        }
+
+        if (in_array($order['estado'], ['entregado', 'cancelado'])) {
+            return ['status' => false, 'message' => 'No se puede reasignar un pedido que ya está ' . $order['estado']];
+        }
+
+        $new_driver = $this->db->where('loc_id', $loc_id)
+                               ->where('slot', $new_slot)
+                               ->get('geopos_deliveries')
+                               ->row_array();
+
+        if (!$new_driver) {
+            return ['status' => false, 'message' => 'El repartidor de destino no existe'];
+        }
+
+        $old_slot = (int)$order['delivery_slot'];
+        $old_driver_name = $order['delivery_nombre'] ?: "Slot #$old_slot";
+
+        if ($old_slot === $new_slot) {
+            return ['status' => false, 'message' => 'El pedido ya está asignado a este repartidor'];
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $motivo_txt = !empty(trim($motivo)) ? (" Motivo: " . trim($motivo)) : "";
+        $audit_note = "\n[Reasignado el " . date('d/m/Y H:i') . " de Slot #$old_slot ($old_driver_name) a Slot #$new_slot ({$new_driver['nombre']}).$motivo_txt]";
+
+        $updated_notes = trim(($order['notas_cocina'] ?? '') . $audit_note);
+
+        // 1. Actualizar el pedido con el nuevo repartidor
+        $this->db->where('id', $order_id)->update('geopos_delivery_orders', [
+            'delivery_slot'     => $new_slot,
+            'delivery_nombre'   => $new_driver['nombre'],
+            'delivery_telefono' => $new_driver['telefono'],
+            'notas_cocina'      => $updated_notes,
+            'assigned_at'       => $now
+        ]);
+
+        // 2. Marcar al nuevo repartidor como ocupado e incrementar contador
+        $this->db->where('id', $new_driver['id'])->update('geopos_deliveries', [
+            'ocupado'          => 1,
+            'pedidos_hoy'      => (int)$new_driver['pedidos_hoy'] + 1,
+            'ultimo_pedido_at' => $now
+        ]);
+
+        // 3. Verificar si el repartidor anterior quedó sin pedidos activos para liberarlo
+        $old_pending = $this->db->where('loc_id', $loc_id)
+                                ->where('delivery_slot', $old_slot)
+                                ->where_in('estado', ['asignado', 'en_camino', 'en_puerta'])
+                                ->count_all_results('geopos_delivery_orders');
+        if ($old_pending === 0) {
+            $this->db->where('loc_id', $loc_id)
+                     ->where('slot', $old_slot)
+                     ->update('geopos_deliveries', ['ocupado' => 0]);
+        }
+
+        // 4. Enviar notificación directa por WhatsApp al nuevo repartidor
+        if (!empty($new_driver['telefono'])) {
+            $loc = $this->db->where('id', $loc_id)->get('geopos_locations')->row_array();
+            $store_name = $loc['cname'] ?? 'el local';
+            $instance = $loc['whatsapp_instance'] ?? 'pos_whatsapp';
+            $monto_fmt = number_format((float)$order['monto_total'], 0, ',', '.') . ' Gs.';
+
+            $msg = "🚨 *¡NUEVO PEDIDO REASIGNADO A TU TURNO!* 🚨\n\n"
+                 . "Hola *{$new_driver['nombre']}*, se te ha reasignado el pedido *{$order['order_number']}* de *{$store_name}*.\n\n"
+                 . "👤 *Cliente:* {$order['cliente_nombre']}\n"
+                 . "📞 *Teléfono:* {$order['cliente_telefono']}\n"
+                 . "📍 *Dirección:* {$order['direccion_entrega']}\n"
+                 . "💰 *Total:* {$monto_fmt} (" . strtoupper($order['metodo_pago']) . ")\n"
+                 . ($motivo ? "ℹ️ *Nota:* $motivo\n\n" : "\n")
+                 . "📲 Abre tu app *Geeks Delivery* para iniciar la entrega.";
+
+            try {
+                $this->send_whatsapp_message($instance, $new_driver['telefono'], $msg);
+            } catch (\Throwable $e) {
+                log_message('error', 'Error al notificar reasignación de delivery: ' . $e->getMessage());
+            }
+        }
+
+        return [
+            'status'         => true,
+            'message'        => "Pedido {$order['order_number']} reasignado exitosamente a {$new_driver['nombre']} (Slot #$new_slot)",
+            'order_number'   => $order['order_number'],
+            'new_driver'     => $new_driver['nombre'],
+            'new_slot'       => $new_slot
+        ];
     }
 }

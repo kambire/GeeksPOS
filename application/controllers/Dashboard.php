@@ -40,6 +40,11 @@ class Dashboard extends CI_Controller
 
     public function index()
     {
+        if ($this->aauth->get_user()->username == 'cocina') {
+            redirect('/kitchen/', 'refresh');
+            return;
+        }
+
         $today = date("Y-m-d");
         $month = date("m");
         $year = date("Y");
