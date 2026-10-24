@@ -1,4 +1,4 @@
-<body class="horizontal-layout horizontal-menu 1-column bg-full-screen-image menu-expanded blank-page blank-page"
+<body class="horizontal-layout horizontal-menu 1-column menu-expanded blank-page blank-page"
       data-open="hover" data-menu="horizontal-menu" data-col="1-column">
 <!-- ////////////////////////////////////////////////////////////////////////////-->
 <style>
@@ -14,10 +14,16 @@
         --gp-bg-soft: #f8fafc;
     }
 
-    body.bg-full-screen-image {
-        margin: 0;
-        padding: 0;
-        background: #030712;
+    /* Override any default background images from Stack Admin */
+    html, body,
+    html body.bg-full-screen-image,
+    body.bg-full-screen-image,
+    body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #030712 !important;
+        background-color: #030712 !important;
+        background-image: none !important;
         overflow-x: hidden;
         min-height: 100vh;
         font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -25,9 +31,9 @@
     }
 
     /* =========================================================================
-       DYNAMIC AMBIENT BACKGROUND WITH LIVING COLOR ORBS & CANVAS
+       SPIDER WEB INTERACTIVE MOTION CANVAS BACKGROUND
        ========================================================================= */
-    .ambient-bg-wrapper {
+    .spider-bg-wrapper {
         position: fixed;
         top: 0;
         left: 0;
@@ -36,99 +42,62 @@
         z-index: 0;
         pointer-events: none;
         overflow: hidden;
+        background: radial-gradient(circle at 50% 50%, #070e24 0%, #030712 68%, #01040a 100%);
     }
 
-    #ambientCanvas {
+    #spiderCanvas {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
         z-index: 1;
-        opacity: 0.85;
+        display: block;
     }
 
-    .ambient-orb {
-        position: absolute;
-        border-radius: 50%;
-        filter: blur(85px);
-        opacity: 0.6;
-        mix-blend-mode: screen;
-        will-change: transform;
-    }
-
-    .orb-cyan {
-        width: 550px;
-        height: 550px;
-        top: -150px;
-        right: -100px;
-        background: radial-gradient(circle, rgba(14, 165, 233, 0.75) 0%, rgba(6, 182, 212, 0.1) 65%, transparent 75%);
-        animation: orbMotion1 22s ease-in-out infinite alternate;
-    }
-
-    .orb-purple {
-        width: 600px;
-        height: 600px;
-        bottom: -180px;
-        left: -120px;
-        background: radial-gradient(circle, rgba(124, 58, 237, 0.75) 0%, rgba(79, 70, 229, 0.1) 65%, transparent 75%);
-        animation: orbMotion2 26s ease-in-out infinite alternate;
-    }
-
-    .orb-pink {
-        width: 450px;
-        height: 450px;
-        top: 35%;
-        left: 45%;
-        background: radial-gradient(circle, rgba(236, 72, 153, 0.55) 0%, rgba(219, 39, 119, 0.1) 65%, transparent 75%);
-        animation: orbMotion3 18s ease-in-out infinite alternate;
-    }
-
-    .orb-emerald {
-        width: 480px;
-        height: 480px;
-        bottom: 10%;
-        right: 15%;
-        background: radial-gradient(circle, rgba(16, 185, 129, 0.5) 0%, rgba(20, 184, 166, 0.08) 65%, transparent 75%);
-        animation: orbMotion4 20s ease-in-out infinite alternate;
-    }
-
-    @keyframes orbMotion1 {
-        0% { transform: translate(0, 0) scale(1) rotate(0deg); }
-        50% { transform: translate(-120px, 90px) scale(1.15) rotate(180deg); }
-        100% { transform: translate(60px, -40px) scale(0.95) rotate(360deg); }
-    }
-
-    @keyframes orbMotion2 {
-        0% { transform: translate(0, 0) scale(1); }
-        50% { transform: translate(110px, -90px) scale(1.2); }
-        100% { transform: translate(-70px, 60px) scale(0.92); }
-    }
-
-    @keyframes orbMotion3 {
-        0% { transform: translate(-50%, -50%) scale(1); }
-        50% { transform: translate(-30%, -70%) scale(1.25); }
-        100% { transform: translate(-70%, -30%) scale(0.9); }
-    }
-
-    @keyframes orbMotion4 {
-        0% { transform: translate(0, 0) scale(1); }
-        50% { transform: translate(-80px, -60px) scale(1.18); }
-        100% { transform: translate(50px, 70px) scale(0.95); }
-    }
-
-    /* Grid de fondo con sutil brillo */
-    .ambient-grid {
+    .spider-vignette {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-                          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-        background-size: 40px 40px;
+        background: radial-gradient(ellipse at center, transparent 40%, rgba(1, 4, 10, 0.78) 100%);
         z-index: 2;
-        opacity: 0.6;
+        pointer-events: none;
+    }
+
+    .spider-glow-pulse {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 820px;
+        height: 820px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(56, 189, 248, 0.08) 0%, rgba(124, 58, 237, 0.05) 45%, transparent 72%);
+        filter: blur(65px);
+        z-index: 1;
+        pointer-events: none;
+        animation: spiderCenterPulse 9s ease-in-out infinite alternate;
+    }
+
+    @keyframes spiderCenterPulse {
+        0% { transform: translate(-50%, -50%) scale(0.88); opacity: 0.6; }
+        100% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+    }
+
+    /* Subtle cyber tech grid */
+    .spider-grid {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+        background-size: 44px 44px;
+        z-index: 2;
+        opacity: 0.7;
     }
 
     /* =========================================================================
@@ -655,14 +624,12 @@
     }
 </style>
 
-<!-- LIVING AMBIENT MOTION BACKGROUND -->
-<div class="ambient-bg-wrapper">
-    <div class="ambient-grid"></div>
-    <div class="ambient-orb orb-cyan"></div>
-    <div class="ambient-orb orb-purple"></div>
-    <div class="ambient-orb orb-pink"></div>
-    <div class="ambient-orb orb-emerald"></div>
-    <canvas id="ambientCanvas"></canvas>
+<!-- SPIDER WEB INTERACTIVE MOTION CANVAS -->
+<div class="spider-bg-wrapper">
+    <div class="spider-grid"></div>
+    <div class="spider-glow-pulse"></div>
+    <canvas id="spiderCanvas"></canvas>
+    <div class="spider-vignette"></div>
 </div>
 
 <!-- LOGIN CONTENT -->
@@ -809,9 +776,11 @@
 <script type="text/javascript" src="<?= assets_url(); ?>app-assets/js/scripts/ui/breadcrumbs-with-stats.js"></script>
 <script src="<?= assets_url(); ?>app-assets/js/scripts/forms/form-login-register.js"></script>
 
-<!-- LIGHTWEIGHT PARTICLE CANVAS & LOGIN ENHANCEMENTS -->
+<!-- SPIDER WEB INTERACTIVE DYNAMIC ENGINE & FORM ENHANCEMENTS -->
 <script>
 (function() {
+    'use strict';
+
     // 1. Toggle Mostrar / Ocultar Contraseña
     var btnToggle = document.getElementById('btnTogglePassword');
     var inputPwd = document.getElementById('user-password');
@@ -830,77 +799,169 @@
         });
     }
 
-    // 2. Canvas interactivo de partículas en vivo
-    var canvas = document.getElementById('ambientCanvas');
+    // 2. Spider Web Dynamic Engine
+    var canvas = document.getElementById('spiderCanvas');
     if (!canvas) return;
     var ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    var width, height;
+    var width = 0, height = 0;
+    var dpr = window.devicePixelRatio || 1;
     var particles = [];
-    var particleCount = window.innerWidth < 768 ? 24 : 50;
-    var maxDistance = 140;
-    var mouse = { x: null, y: null, radius: 120 };
+    var maxDistance = 145; // Distancia máxima para telaraña entre partículas
+    var mouseDistance = 210; // Distancia de alcance de la telaraña hacia el cursor
+    var shockwaves = [];
+
+    // Mouse state con interpolación suave (lerp)
+    var mouse = {
+        x: -9999,
+        y: -9999,
+        targetX: -9999,
+        targetY: -9999,
+        active: false,
+        pulseRadius: 0
+    };
 
     function resize() {
-        width = canvas.width = window.innerWidth;
-        height = canvas.height = window.innerHeight;
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
     }
     window.addEventListener('resize', resize);
     resize();
 
+    // Eventos de movimiento del cursor
     window.addEventListener('mousemove', function(e) {
-        mouse.x = e.clientX;
-        mouse.y = e.clientY;
+        mouse.targetX = e.clientX;
+        mouse.targetY = e.clientY;
+        mouse.active = true;
     });
 
-    window.addEventListener('mouseout', function() {
-        mouse.x = null;
-        mouse.y = null;
+    window.addEventListener('mouseleave', function() {
+        mouse.active = false;
+        mouse.targetX = -9999;
+        mouse.targetY = -9999;
     });
 
-    function Particle() {
-        this.x = Math.random() * width;
-        this.y = Math.random() * height;
-        this.vx = (Math.random() - 0.5) * 0.7;
-        this.vy = (Math.random() - 0.5) * 0.7;
-        this.radius = Math.random() * 2 + 1;
-        this.color = Math.random() > 0.5 ? 'rgba(56, 189, 248, ' : 'rgba(168, 85, 247, ';
-        this.alpha = Math.random() * 0.5 + 0.2;
+    window.addEventListener('touchmove', function(e) {
+        if (e.touches && e.touches.length > 0) {
+            mouse.targetX = e.touches[0].clientX;
+            mouse.targetY = e.touches[0].clientY;
+            mouse.active = true;
+        }
+    }, { passive: true });
+
+    window.addEventListener('touchend', function() {
+        mouse.active = false;
+        mouse.targetX = -9999;
+        mouse.targetY = -9999;
+    });
+
+    // Efecto onda de impacto en la telaraña al hacer click
+    window.addEventListener('mousedown', function(e) {
+        createSpiderShockwave(e.clientX, e.clientY);
+    });
+
+    function createSpiderShockwave(x, y) {
+        shockwaves.push({
+            x: x,
+            y: y,
+            radius: 5,
+            maxRadius: 200,
+            alpha: 0.85
+        });
+
+        // Impulso físico a las partículas cercanas (vibración de telaraña)
+        for (var i = 0; i < particles.length; i++) {
+            var p = particles[i];
+            var dx = p.x - x;
+            var dy = p.y - y;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 200 && dist > 1) {
+                var force = (200 - dist) / 200 * 7;
+                p.vx += (dx / dist) * force;
+                p.vy += (dy / dist) * force;
+            }
+        }
+    }
+
+    var colorPalettes = [
+        { r: 56, g: 189, b: 248, hex: '#38bdf8' },  // Neon Cyan
+        { r: 129, g: 140, b: 248, hex: '#818cf8' }, // Indigo Light
+        { r: 168, g: 85, b: 247, hex: '#a855f7' },  // Purple Glow
+        { r: 59, g: 130, b: 246, hex: '#3b82f6' },  // Blue
+        { r: 34, g: 197, b: 94, hex: '#22c55e' }   // Emerald
+    ];
+
+    function Particle(isInitial) {
+        this.x = isInitial ? Math.random() * width : (Math.random() > 0.5 ? 0 : width);
+        this.y = isInitial ? Math.random() * height : Math.random() * height;
+        var speed = Math.random() * 0.7 + 0.35;
+        var angle = Math.random() * Math.PI * 2;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.baseRadius = Math.random() * 1.8 + 1.2;
+        this.radius = this.baseRadius;
+        this.palette = colorPalettes[Math.floor(Math.random() * colorPalettes.length)];
+        this.baseAlpha = Math.random() * 0.45 + 0.35;
+        this.pulseSpeed = Math.random() * 0.035 + 0.015;
+        this.pulsePhase = Math.random() * Math.PI * 2;
     }
 
     Particle.prototype.update = function() {
-        this.x += this.vx;
-        this.y += this.vy;
+        this.pulsePhase += this.pulseSpeed;
+        this.radius = this.baseRadius + Math.sin(this.pulsePhase) * 0.5;
 
-        if (this.x < 0 || this.x > width) this.vx = -this.vx;
-        if (this.y < 0 || this.y > height) this.vy = -this.vy;
-
-        // Reacción sutil al cursor del ratón
-        if (mouse.x !== null && mouse.y !== null) {
+        // Atracción elástica hacia el cursor (efecto telaraña tensada)
+        if (mouse.active) {
             var dx = mouse.x - this.x;
             var dy = mouse.y - this.y;
             var dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < mouse.radius) {
-                var force = (mouse.radius - dist) / mouse.radius;
-                this.x -= (dx / dist) * force * 1.5;
-                this.y -= (dy / dist) * force * 1.5;
+            if (dist < mouseDistance && dist > 1) {
+                var tension = (1 - dist / mouseDistance) * 0.045;
+                this.vx += (dx / dist) * tension;
+                this.vy += (dy / dist) * tension;
             }
         }
+
+        // Amortiguación suave
+        this.vx *= 0.985;
+        this.vy *= 0.985;
+
+        // Movimiento mínimo constante para evitar congelamiento
+        var currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+        if (currentSpeed < 0.25) {
+            this.vx += (Math.random() - 0.5) * 0.15;
+            this.vy += (Math.random() - 0.5) * 0.15;
+        }
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // Rebotar suavemente en los bordes
+        if (this.x < -15) { this.x = -15; this.vx = Math.abs(this.vx); }
+        if (this.x > width + 15) { this.x = width + 15; this.vx = -Math.abs(this.vx); }
+        if (this.y < -15) { this.y = -15; this.vy = Math.abs(this.vy); }
+        if (this.y > height + 15) { this.y = height + 15; this.vy = -Math.abs(this.vy); }
     };
 
     Particle.prototype.draw = function() {
+        var alpha = this.baseAlpha + Math.sin(this.pulsePhase) * 0.15;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.color + this.alpha + ')';
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = this.color + '0.8)';
+        ctx.arc(this.x, this.y, Math.max(0.5, this.radius), 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(' + this.palette.r + ',' + this.palette.g + ',' + this.palette.b + ',' + Math.max(0.1, alpha).toFixed(3) + ')';
         ctx.fill();
-        ctx.shadowBlur = 0;
     };
 
+    // Densidad dinámica de partículas según resolución
+    var particleCount = Math.min(95, Math.max(35, Math.floor((window.innerWidth * window.innerHeight) / 14000)));
     for (var i = 0; i < particleCount; i++) {
-        particles.push(new Particle());
+        particles.push(new Particle(true));
     }
 
     var isTabActive = true;
@@ -912,25 +973,102 @@
         if (isTabActive) {
             ctx.clearRect(0, 0, width, height);
 
-            for (var i = 0; i < particles.length; i++) {
-                particles[i].update();
-                particles[i].draw();
+            // Suavizado del cursor (Lerp)
+            if (mouse.active) {
+                mouse.x += (mouse.targetX - mouse.x) * 0.18;
+                mouse.y += (mouse.targetY - mouse.y) * 0.18;
+                mouse.pulseRadius = (mouse.pulseRadius + 0.6) % 35;
+            }
 
-                // Conectar nodos cercanos con líneas de luz
+            // 1. Actualizar y dibujar partículas
+            for (var p = 0; p < particles.length; p++) {
+                particles[p].update();
+                particles[p].draw();
+            }
+
+            // 2. Conexiones de Telaraña (Spider-Web filaments) entre partículas
+            for (var i = 0; i < particles.length; i++) {
+                var p1 = particles[i];
+
                 for (var j = i + 1; j < particles.length; j++) {
-                    var dx = particles[i].x - particles[j].x;
-                    var dy = particles[i].y - particles[j].y;
+                    var p2 = particles[j];
+                    var dx = p1.x - p2.x;
+                    var dy = p1.y - p2.y;
                     var dist = Math.sqrt(dx * dx + dy * dy);
 
                     if (dist < maxDistance) {
-                        var lineAlpha = (1 - dist / maxDistance) * 0.22;
+                        var strength = (1 - dist / maxDistance);
+                        var alpha = strength * 0.32;
+                        var lw = strength * 1.1;
+
                         ctx.beginPath();
-                        ctx.moveTo(particles[i].x, particles[i].y);
-                        ctx.lineTo(particles[j].x, particles[j].y);
-                        ctx.strokeStyle = 'rgba(56, 189, 248, ' + lineAlpha + ')';
-                        ctx.lineWidth = 1;
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.strokeStyle = 'rgba(' + p1.palette.r + ',' + p1.palette.g + ',' + p1.palette.b + ',' + alpha.toFixed(3) + ')';
+                        ctx.lineWidth = lw;
                         ctx.stroke();
                     }
+                }
+
+                // 3. Hilos de telaraña activos hacia el cursor (Spider Anchor)
+                if (mouse.active) {
+                    var mdx = mouse.x - p1.x;
+                    var mdy = mouse.y - p1.y;
+                    var mdist = Math.sqrt(mdx * mdx + mdy * mdy);
+
+                    if (mdist < mouseDistance) {
+                        var mStrength = (1 - mdist / mouseDistance);
+                        var mAlpha = mStrength * 0.75;
+                        var mLw = mStrength * 1.7;
+
+                        var grad = ctx.createLinearGradient(p1.x, p1.y, mouse.x, mouse.y);
+                        grad.addColorStop(0, 'rgba(' + p1.palette.r + ',' + p1.palette.g + ',' + p1.palette.b + ',' + (mAlpha * 0.55).toFixed(3) + ')');
+                        grad.addColorStop(1, 'rgba(56, 189, 248, ' + mAlpha.toFixed(3) + ')');
+
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(mouse.x, mouse.y);
+                        ctx.strokeStyle = grad;
+                        ctx.lineWidth = mLw;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // 4. Nodo central de la Araña en el cursor (Spider Nexus)
+            if (mouse.active) {
+                // Anillo de sonar / pulso de telaraña
+                ctx.beginPath();
+                ctx.arc(mouse.x, mouse.y, mouse.pulseRadius, 0, Math.PI * 2);
+                var ringAlpha = (1 - mouse.pulseRadius / 35) * 0.45;
+                ctx.strokeStyle = 'rgba(56, 189, 248, ' + ringAlpha.toFixed(3) + ')';
+                ctx.lineWidth = 1.3;
+                ctx.stroke();
+
+                // Núcleo brillante
+                ctx.beginPath();
+                ctx.arc(mouse.x, mouse.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#38bdf8';
+                ctx.shadowBlur = 12;
+                ctx.shadowColor = '#38bdf8';
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            // 5. Ondas expansivas de choque (Spider Shockwaves al hacer click)
+            for (var s = shockwaves.length - 1; s >= 0; s--) {
+                var sw = shockwaves[s];
+                sw.radius += 5.5;
+                sw.alpha *= 0.94;
+
+                ctx.beginPath();
+                ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(56, 189, 248, ' + sw.alpha.toFixed(3) + ')';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                if (sw.alpha < 0.02 || sw.radius > sw.maxRadius) {
+                    shockwaves.splice(s, 1);
                 }
             }
         }

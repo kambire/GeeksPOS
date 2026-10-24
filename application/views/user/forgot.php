@@ -1,4 +1,4 @@
-<body class="horizontal-layout horizontal-menu 1-column  bg-full-screen-image menu-expanded blank-page blank-page"
+<body class="horizontal-layout horizontal-menu 1-column  menu-expanded blank-page blank-page"
       data-open="hover" data-menu="horizontal-menu" data-col="1-column">
 <!-- ////////////////////////////////////////////////////////////////////////////-->
 <div class="app-content content">
